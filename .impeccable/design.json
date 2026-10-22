@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-22T12:35:00.000Z",
+  "title": "Design System: Crash Game",
+  "extensions": {
+    "colorMeta": {
+      "primary": { "role": "primary", "displayName": "Solar Gold", "canonical": "#facc15", "tonalRamp": ["#422006", "#713f12", "#a16207", "#ca8a04", "#eab308", "#facc15", "#fde047", "#fef08a"] },
+      "primary-hover": { "role": "primary", "displayName": "Solar Gold Hover", "canonical": "#eab308", "tonalRamp": ["#422006", "#713f12", "#a16207", "#ca8a04", "#eab308", "#facc15", "#fde047", "#fef08a"] },
+      "action-green": { "role": "secondary", "displayName": "Launch Green", "canonical": "#16a34a", "tonalRamp": ["#052e16", "#14532d", "#166534", "#15803d", "#16a34a", "#22c55e", "#4ade80", "#86efac"] },
+      "action-green-hover": { "role": "secondary", "displayName": "Launch Green Hover", "canonical": "#15803d", "tonalRamp": ["#052e16", "#14532d", "#166534", "#15803d", "#16a34a", "#22c55e", "#4ade80", "#86efac"] },
+      "crash-red": { "role": "tertiary", "displayName": "Nebula Crimson", "canonical": "#dc2626", "tonalRamp": ["#450a0a", "#7f1d1d", "#991b1b", "#b91c1c", "#dc2626", "#ef4444", "#f87171", "#fca5a5"] },
+      "void-black": { "role": "neutral", "displayName": "Void Black", "canonical": "#181a20", "tonalRamp": ["#000000", "#0b0c0e", "#121418", "#181a20", "#242730", "#323642", "#454a5a", "#5a6175"] },
+      "surface-card": { "role": "neutral", "displayName": "Surface Charcoal", "canonical": "#1f2937", "tonalRamp": ["#111827", "#1f2937", "#374151", "#4b5563", "#6b7280", "#9ca3af", "#d1d5db", "#f3f4f6"] },
+      "surface-elevated": { "role": "neutral", "displayName": "Graphite Elevated", "canonical": "#374151", "tonalRamp": ["#111827", "#1f2937", "#374151", "#4b5563", "#6b7280", "#9ca3af", "#d1d5db", "#f3f4f6"] },
+      "text-primary": { "role": "neutral", "displayName": "Starlight White", "canonical": "#ffffff", "tonalRamp": ["#111827", "#374151", "#6b7280", "#9ca3af", "#d1d5db", "#e5e7eb", "#f3f4f6", "#ffffff"] },
+      "text-muted": { "role": "neutral", "displayName": "Muted Comet", "canonical": "#9ca3af", "tonalRamp": ["#111827", "#1f2937", "#374151", "#4b5563", "#6b7280", "#9ca3af", "#d1d5db", "#f3f4f6"] },
+      "border-subtle": { "role": "neutral", "displayName": "Subtle Border", "canonical": "#374151", "tonalRamp": ["#111827", "#1f2937", "#374151", "#4b5563", "#6b7280", "#9ca3af", "#d1d5db", "#f3f4f6"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display Multiplier", "purpose": "Canvas multiplier counter and high-impact milestone figures." },
+      "headline": { "displayName": "Section Headline", "purpose": "Major section banners and dialog headers." },
+      "title": { "displayName": "Card Title", "purpose": "Component containers and leaderboard table headers." },
+      "body": { "displayName": "Body Text", "purpose": "Chat dialogue, user notes, and system notices." },
+      "label": { "displayName": "Telemetry Label", "purpose": "Tabular monospace readouts, coin counts, and timer metrics." }
+    },
+    "shadows": [
+      { "name": "ambient-card", "value": "0 10px 15px -3px rgba(0, 0, 0, 0.5)", "purpose": "Elevates cards and decks from the void canvas." },
+      { "name": "golden-glow", "value": "0 0 16px rgba(250, 204, 21, 0.35)", "purpose": "Active selected bet chip and primed cashout trigger." },
+      { "name": "launch-glow", "value": "0 0 16px rgba(22, 163, 74, 0.35)", "purpose": "Ready-to-place betting trigger." }
+    ],
+    "motion": [
+      { "name": "ease-tactile", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Instant responsive feedback for mobile tap states." },
+      { "name": "duration-snap", "value": "100ms", "purpose": "Fast button compress and release cycle." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Bet Button",
+      "kind": "button",
+      "refersTo": "button-bet",
+      "description": "Primary action trigger to submit wager during betting countdown phase.",
+      "html": "<button class=\"ds-btn-bet\">ثبت شرط 10 🪙</button>",
+      "css": ".ds-btn-bet { background: #16a34a; color: #ffffff; width: 100%; padding: 18px 24px; font-family: 'Raleway', sans-serif; font-size: 18px; font-weight: 700; border: none; border-radius: 12px; cursor: pointer; transition: transform 0.1s ease, background 0.1s ease, box-shadow 0.1s ease; box-shadow: 0 0 16px rgba(22, 163, 74, 0.35); } .ds-btn-bet:hover { background: #15803d; } .ds-btn-bet:active { transform: scale(0.97); }"
+    },
+    {
+      "name": "Cashout Button",
+      "kind": "button",
+      "refersTo": "button-cashout",
+      "description": "High-urgency action trigger to lock in multiplier and win coins before rocket crash.",
+      "html": "<button class=\"ds-btn-cashout\">برداشت سود 24.50 🪙</button>",
+      "css": ".ds-btn-cashout { background: #facc15; color: #181a20; width: 100%; padding: 18px 24px; font-family: 'Raleway', sans-serif; font-size: 18px; font-weight: 800; border: none; border-radius: 12px; cursor: pointer; transition: transform 0.1s ease, background 0.1s ease, box-shadow 0.1s ease; box-shadow: 0 0 20px rgba(250, 204, 21, 0.45); } .ds-btn-cashout:hover { background: #eab308; } .ds-btn-cashout:active { transform: scale(0.97); }"
+    },
+    {
+      "name": "Bet Chip",
+      "kind": "chip",
+      "refersTo": "chip-bet",
+      "description": "Preset wager selection chip for 10, 50, and 100 coin denominations.",
+      "html": "<button class=\"ds-chip-bet ds-chip-active\"><span class=\"ds-chip-val\">50</span> <span class=\"ds-chip-icon\">🪙</span></button>",
+      "css": ".ds-chip-bet { background: #374151; color: #ffffff; padding: 10px 16px; font-family: 'Raleway', sans-serif; font-size: 15px; font-weight: 700; border: 2px solid transparent; border-radius: 12px; cursor: pointer; transition: all 0.1s ease; } .ds-chip-bet:hover { background: #4b5563; } .ds-chip-active { background: #ca8a04; border-color: #facc15; box-shadow: 0 0 12px rgba(250, 204, 21, 0.3); transform: scale(1.04); }"
+    },
+    {
+      "name": "Header Balance Badge",
+      "kind": "card",
+      "refersTo": "header-balance",
+      "description": "Centered pill container showing real-time player coin balance with gold border.",
+      "html": "<div class=\"ds-header-balance\"><span class=\"ds-balance-coin\">🪙</span><span class=\"ds-balance-val\">1,250</span><span class=\"ds-balance-unit\">coins</span></div>",
+      "css": ".ds-header-balance { display: inline-flex; align-items: center; gap: 8px; background: #374151; border: 1px solid #facc15; border-radius: 12px; padding: 6px 14px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4); } .ds-balance-coin { font-size: 16px; } .ds-balance-val { color: #ffffff; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 15px; font-weight: 700; } .ds-balance-unit { color: #fde047; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }"
+    },
+    {
+      "name": "Card Panel",
+      "kind": "card",
+      "refersTo": "card-panel",
+      "description": "Foundational dark container for betting controls, history records, and telemetry stats.",
+      "html": "<div class=\"ds-card-panel\"><h4 class=\"ds-card-title\">تاریخچه بازی‌ها</h4><p class=\"ds-card-body\">آخرین نتایج راندهای بازی آنلاین چندنفره.</p></div>",
+      "css": ".ds-card-panel { background: linear-gradient(180deg, #1f2937 0%, #111827 100%); border: 1px solid rgba(55, 65, 81, 0.6); border-radius: 12px; padding: 16px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); } .ds-card-title { color: #ffffff; font-family: 'Raleway', sans-serif; font-size: 16px; font-weight: 700; margin: 0 0 8px 0; } .ds-card-body { color: #9ca3af; font-family: 'Raleway', sans-serif; font-size: 13px; line-height: 1.4; margin: 0; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Cosmic Arcade",
+    "overview": "The visual world balances high-suspense arcade excitement with the sleekness of modern dark-mode mobile interfaces. Designed exclusively for the Telegram Mini App environment, the interface treats the screen as an illuminated cockpit window looking out into deep space: deep void blacks, velvety charcoal cards, and intense electric neon accents. Every visual cue delivers instant feedback.",
+    "keyCharacteristics": [
+      "Pitch-black void foundations layered with warm charcoal card surfaces.",
+      "High-contrast semantic tri-state colors: Solar Gold (multiplier/cashout), Launch Green (active bet), and Nebula Crimson (crash event).",
+      "Tactile, chunky controls optimized for rapid single-thumb mobile interaction.",
+      "Space retro-arcade flair: parallax star fields, cosmic glow borders, and bold monospace telemetry numbers."
+    ],
+    "rules": [
+      {
+        "name": "The Tri-State Semantic Rule",
+        "body": "Buttons and status indicators must strictly reflect the current round phase: Launch Green while waiting/betting, Solar Gold while rocket is airborne and cashout is primed, and Nebula Crimson the instant the crash occurs. Never mix these state colors.",
+        "section": "colors"
+      },
+      {
+        "name": "The Voltage Rule",
+        "body": "High-saturation accents (Solar Gold, Launch Green, Nebula Crimson) may occupy at most 15% of the total surface area. The remaining 85% must remain dark neutrals so that state changes flash with maximum perceptual impact.",
+        "section": "colors"
+      },
+      {
+        "name": "The Telemetry Monospace Rule",
+        "body": "Any rapidly fluctuating numerical data (multiplier counter, live coin balances, round timer milliseconds) must use tabular monospace (`font-mono`) to prevent layout jitter as digits change.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tonal Stratum Rule",
+        "body": "Elevate elements purely through background lightness: Void Black (#181a20) on floor -> Surface Charcoal (#1f2937) for cards -> Graphite (#374151) for inner controls. Never use light-colored drop shadows.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do anchor the primary action button to the bottom thumb zone for effortless one-handed play.",
+      "Do use tabular monospace (`font-mono`) for all live multiplier numbers and coin balances.",
+      "Do apply Solar Gold exclusively to currency, current multiplier, and cashout events.",
+      "Do support dark mode natively by anchoring the root surface to Void Black (#181a20).",
+      "Do provide visual pulse and state changes in under 100ms when bets are placed or cashed out."
+    ],
+    "donts": [
+      "Don't introduce light or white backgrounds anywhere in the interface; the game world is strictly dark space.",
+      "Don't add complex multi-step betting sliders; stick to quick-tap preset chips (10, 50, 100) for fast round turnaround.",
+      "Don't use low-contrast gray text on dark cards; keep all labels at or above WCAG AA contrast (minimum `#9ca3af` for secondary text).",
+      "Don't allow desktop horizontal overflows or vertical layout jumps when the multiplier ascends."
+    ]
+  }
+}

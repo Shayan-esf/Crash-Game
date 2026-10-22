@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="bg" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1f2937" />
+      <stop offset="70%" stop-color="#111318" />
+      <stop offset="100%" stop-color="#07080b" />
+    </radialGradient>
+
+    <!-- Neon Glow Filter -->
+    <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="10" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <!-- Rocket Body Gradient -->
+    <linearGradient id="rocketBody" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="35%" stop-color="#e2e8f0" />
+      <stop offset="75%" stop-color="#94a3b8" />
+      <stop offset="100%" stop-color="#475569" />
+    </linearGradient>
+
+    <!-- Gold Accent Gradient -->
+    <linearGradient id="goldAccent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="40%" stop-color="#facc15" />
+      <stop offset="100%" stop-color="#ca8a04" />
+    </linearGradient>
+
+    <!-- Thruster Flame Gradient -->
+    <linearGradient id="flameGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="30%" stop-color="#facc15" />
+      <stop offset="70%" stop-color="#f97316" />
+      <stop offset="100%" stop-color="#ef4444" />
+    </linearGradient>
+  </defs>
+
+  <!-- Circular Outer Frame -->
+  <circle cx="256" cy="256" r="244" fill="url(#bg)" stroke="#374151" stroke-width="6" />
+  <circle cx="256" cy="256" r="240" fill="none" stroke="url(#goldAccent)" stroke-width="4" stroke-opacity="0.8" filter="url(#neonGlow)" />
+
+  <!-- Orbit Ring Decor -->
+  <ellipse cx="256" cy="256" rx="205" ry="95" transform="rotate(-30 256 256)" fill="none" stroke="#facc15" stroke-width="2.5" stroke-dasharray="14 12" stroke-opacity="0.35" />
+
+  <!-- Stars -->
+  <circle cx="120" cy="110" r="3.5" fill="#facc15" opacity="0.8" />
+  <circle cx="390" cy="130" r="4" fill="#38bdf8" opacity="0.9" />
+  <circle cx="410" cy="360" r="3" fill="#ffffff" opacity="0.7" />
+  <circle cx="110" cy="380" r="3" fill="#facc15" opacity="0.6" />
+
+  <!-- Thruster Exhaust Jet -->
+  <path d="M 195 315 C 170 345, 140 380, 115 410 C 145 385, 180 355, 210 330 Z" fill="url(#flameGrad)" filter="url(#neonGlow)" />
+  <path d="M 200 310 C 182 332, 160 358, 142 380 C 164 362, 190 340, 212 322 Z" fill="#ffffff" opacity="0.85" />
+
+  <!-- Left Fin -->
+  <path d="M 205 285 L 150 315 L 175 255 Z" fill="#dc2626" stroke="#991b1b" stroke-width="2" />
+  <path d="M 200 280 L 155 310 L 170 260 Z" fill="url(#goldAccent)" opacity="0.8" />
+
+  <!-- Right Fin -->
+  <path d="M 285 205 L 315 150 L 255 175 Z" fill="#dc2626" stroke="#991b1b" stroke-width="2" />
+  <path d="M 280 200 L 310 155 L 260 170 Z" fill="url(#goldAccent)" opacity="0.8" />
+
+  <!-- Central Fuselage (Rocket Body) -->
+  <path d="M 375 137 C 325 150, 245 205, 205 285 C 220 300, 245 305, 285 285 C 345 235, 390 175, 375 137 Z" fill="url(#rocketBody)" stroke="#1e293b" stroke-width="3" />
+
+  <!-- Rocket Nose Cone -->
+  <path d="M 375 137 C 362 145, 345 156, 335 166 C 346 177, 357 194, 365 207 C 385 175, 390 150, 375 137 Z" fill="url(#goldAccent)" />
+
+  <!-- Porthole Window -->
+  <circle cx="295" cy="217" r="26" fill="#0f172a" stroke="url(#goldAccent)" stroke-width="4" />
+  <circle cx="295" cy="217" r="18" fill="#38bdf8" opacity="0.9" filter="url(#neonGlow)" />
+  <circle cx="290" cy="212" r="6" fill="#ffffff" opacity="0.8" />
+
+  <!-- Speed Stripe -->
+  <path d="M 240 270 Q 280 230 330 195" fill="none" stroke="#facc15" stroke-width="3" stroke-linecap="round" opacity="0.9" />
+</svg>

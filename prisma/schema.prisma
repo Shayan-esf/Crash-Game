@@ -1,0 +1,148 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  telegramId   String   @unique
+  username     String?
+  avatarUrl    String?
+  balance      Float    @default(1000)
+  phone        String?  @unique
+  phoneVerified Boolean @default(false)
+  referrerId   String?
+  referrer     User?    @relation("UserReferrals", fields: [referrerId], references: [id])
+  referredUsers User[]  @relation("UserReferrals")
+  referralCoinsEarned Float @default(0)
+  unlockedSkins String   @default("default")
+  selectedSkin  String   @default("default")
+  // tonWallet    String?
+  blocked      Boolean  @default(false)
+  games        Game[]
+  tonDeposits  TonDeposit[]
+  starPurchases StarPurchase[]
+  // withdrawals  Withdrawal[]
+  // withdrawRequests WithdrawRequest[]
+  // deposits     Deposit[]
+  transactions Transaction[]
+  chatMessages ChatMessage[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model TonDeposit {
+  id            String   @id @default(cuid())
+  user          User     @relation(fields: [userId], references: [id])
+  userId        String
+  amountTon     Float
+  coinsReceived Float
+  txHash        String   @unique
+  boc           String?
+  status        String   @default("completed") // completed, pending, failed
+  createdAt     DateTime @default(now())
+}
+
+model StarPurchase {
+  id                      String   @id @default(cuid())
+  user                    User     @relation(fields: [userId], references: [id])
+  userId                  String
+  itemType                String   // "coins" | "skin"
+  itemId                  String   // packageId or skinId
+  starsAmount             Int
+  rewardValue             Float    // coins count or 0 for skin
+  telegramPaymentChargeId String?
+  status                  String   @default("completed")
+  createdAt               DateTime @default(now())
+}
+
+model Game {
+  id         Int      @id @default(autoincrement())
+  user       User     @relation(fields: [userId], references: [id])
+  userId     String
+  gameSession GameSession @relation(fields: [gameSessionId], references: [id])
+  gameSessionId String
+  bet        Float
+  crashPoint Float?
+  cashout    Float?
+  profit     Float
+  status     String
+  theme      String?  @default("rocket")
+  createdAt  DateTime @default(now())
+}
+
+model GameSession {
+  id          String   @id @default(cuid())
+  status      String   @default("waiting") // waiting, starting, playing, crashed
+  crashPoint  Float?
+  startTime   DateTime?
+  crashTime   DateTime?
+  duration    Int?     // بر حسب میلی‌ثانیه
+  games       Game[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  message   String
+  type      String   @default("text") // text, system, game_result
+  gameSessionId String? // برای پیام‌های مرتبط با بازی
+  createdAt DateTime @default(now())
+}
+
+// model Withdrawal {
+//   id         Int      @id @default(autoincrement())
+//   user       User     @relation(fields: [userId], references: [id])
+//   userId     String
+//   amount     Float
+//   method     String
+//   status     String   @default("pending")
+//   createdAt  DateTime @default(now())
+// }
+
+// model WithdrawRequest {
+//   id         String   @id @default(cuid())
+//   user       User     @relation(fields: [userId], references: [id])
+//   userId     String
+//   amount     Int      // بر حسب استارز
+//   username   String   // نام کاربری جهت انتقال
+//   status     String   @default("pending") // pending, approved, rejected
+//   createdAt  DateTime @default(now())
+//   approvedAt DateTime?
+//   approvedBy String?  // telegramId ادمین تاییدکننده
+// }
+
+// model Deposit {
+//   id        Int      @id @default(autoincrement())
+//   user      User     @relation(fields: [userId], references: [id])
+//   userId    String
+//   amount    Float
+//   hash      String   @unique
+//   from      String
+//   createdAt DateTime @default(now())
+// }
+
+model Transaction {
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  type      String   // game, purchase
+  amount    Float
+  currency  String   @default("coins") // coins
+  payload   String?  // description
+  status    String   @default("pending") // pending, success, failed
+  createdAt DateTime @default(now())
+}
