@@ -225,20 +225,23 @@ async function handleMessage(msg) {
   // ۱. دستور /start
   if (text.startsWith('/start')) {
     const welcomeText = `
-🚀 <b>به پلتفرم بازی انفجار Crash خوش آمدید!</b>
+⚠️ <b>توجه: سرور بازی در حال حاضر متصل نیست.</b>
 
-سلام <b>${from.first_name || from.username || 'بازیکن'}</b> عزیز 🎮
-موجودی اولیه شما: <b>${formatCoins(user?.balance)} COINS</b>
+سلام <b>${from.first_name || from.username || 'کاربر'}</b> عزیز 🎮
+در حال حاضر ارتباط با سرور قطع می‌باشد یا در حالت تعمیرات است.
 
-روی دکمه زیر کلیک کنید تا بازی داخل تلگرام اجرا شود:
+📞 <b>جهت فعال‌سازی، دسترسی یا هرگونه سوال لطفا به پشتیبانی پیام دهید:</b>
+👉 @ShayanEsfahanizadeh
+
+موجودی ثبت‌شده شما: <b>${formatCoins(user?.balance)} COINS</b>
     `.trim();
 
     return bot.sendMessage(chatId, welcomeText, {
       reply_markup: {
         ...mainReplyKeyboard,
         inline_keyboard: [
-          [{ text: '🚀 ورود به اتاق بازی (Web App)', web_app: { url: WEBAPP_URL } }],
-          [{ text: '💰 استعلام موجودی', callback_data: 'balance' }, { text: '🎁 دریافت بونوس', callback_data: 'daily_reward' }]
+          [{ text: '💬 ارتباط با پشتیبانی', url: 'https://t.me/ShayanEsfahanizadeh' }],
+          [{ text: '🚀 ورود به بازی (در صورت اتصال)', web_app: { url: WEBAPP_URL } }]
         ]
       }
     });

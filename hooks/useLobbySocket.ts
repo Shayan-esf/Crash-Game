@@ -27,7 +27,9 @@ export function useLobbySocket({ initData }: { initData: string }) {
     if (wsRef.current) {
       wsRef.current.close();
     }
-    const ws = new WebSocket(process.env.NEXT_PUBLIC_WS_URL || `ws://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:4001`);
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || `ws://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:4001`;
+    console.log('[useLobbySocket] Connecting to WebSocket URL:', wsUrl);
+    const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {

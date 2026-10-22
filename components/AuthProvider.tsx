@@ -30,6 +30,11 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     } catch (err) {
       console.warn("[AuthProvider] Launch outside Telegram, using dev mode:", err)
     }
+
+    // اگر خارج تلگرام بود یا مقدار خالی بود، مقدار را undefined بگذار تا حالت dev فعال شود
+    if (!initDataRaw || initDataRaw.trim() === "") {
+      initDataRaw = undefined
+    }
     console.log("[AuthProvider] initDataRaw:", initDataRaw)
 
     // در صورت عدم وجود initData (مرورگر / لوکال‌هاست)، از حالت تستی استفاده می‌شود
