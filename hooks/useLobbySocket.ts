@@ -55,12 +55,17 @@ export function useLobbySocket({ initData }: { initData: string }) {
           setError(null);
         } else if (data.type === 'session-history') {
           setSessionHistory(data.history || []);
+        } else if (data.type === 'game-start' || data.type === 'game-flying' || data.type === 'sync') {
+          setConnected(true);
+          setLobbyEvents((prev) => [...prev.slice(-99), data]);
         } else if (data.type === 'balance-update') {
           setLobbyEvents((prev) => [...prev.slice(-99), data]);
         } else if (data.type === 'chat-message') {
           setChatMessages((prev) => [...prev.slice(-99), data]);
         } else if (data.error) {
           console.warn('[useLobbySocket] Server returned error:', data.error);
+          // حتی در صورت خطای احراز هویت موقت، اتصال وب‌سوکت قطع تلقی نشود تا بازی رندر شود
+          setConnected(true);
           setError(data.error);
         } else {
           setLobbyEvents((prev) => [...prev.slice(-99), data]);
