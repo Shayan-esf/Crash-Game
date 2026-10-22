@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // دریافت ۱۰ سشن پایان‌یافته اخیر دارای نقطه کرش
     const sessions = await prisma.gameSession.findMany({
@@ -27,8 +27,11 @@ export async function GET(request: NextRequest) {
     }));
 
     return NextResponse.json({ history });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching session history:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({
+      error: 'Internal server error',
+      details: error?.message || String(error)
+    }, { status: 500 });
   }
 } 

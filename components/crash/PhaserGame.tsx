@@ -1330,16 +1330,19 @@ function PhaserGame({
 
       // 1. Calculate live multiplier and flight dynamics
       let currentMultiplier = 1.0;
-      let flightProgress = 0;
-      const totalCrashTime = crashTime > 0 ? crashTime : 20000;
+      const effectiveCrashTime =
+        crashTime > 0
+          ? crashTime
+          : Math.max(800, Math.round((Math.log(Math.max(1.01, crashPoint || 1.0)) / 0.06) * 1000));
+      const targetCrashPoint = crashPoint > 1.0 ? crashPoint : null;
 
       if (phase === 'flying') {
         const elapsed = Math.max(0, now - startTime);
-        flightProgress = Math.min(elapsed / totalCrashTime, 1);
-        if (flightProgress >= 1) {
-          currentMultiplier = crashPoint || 1.0;
+        if (elapsed >= effectiveCrashTime) {
+          currentMultiplier = targetCrashPoint || Math.max(1.0, Math.exp(0.06 * (effectiveCrashTime / 1000)));
         } else {
-          currentMultiplier = Math.pow(Math.E, flightProgress * Math.log(Math.max(1, totalCrashTime / 1000)));
+          const rawMult = Math.max(1.0, Math.exp(0.06 * (elapsed / 1000)));
+          currentMultiplier = targetCrashPoint ? Math.min(targetCrashPoint, rawMult) : rawMult;
         }
       } else if (phase === 'crashed') {
         currentMultiplier = crashPoint || 1.0;

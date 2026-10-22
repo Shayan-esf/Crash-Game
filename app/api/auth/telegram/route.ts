@@ -14,19 +14,29 @@ export async function POST(request: NextRequest) {
 
     // حالت DEV برای تست در مرورگر خارج از تلگرام
     if (initData === 'dev') {
-      let user = await prisma.user.upsert({
+      let user = await prisma.user.findUnique({
         where: { telegramId: 'dev-test-user' },
-        update: {},
-        create: {
-          telegramId: 'dev-test-user',
-          username: 'dev-test-user',
-          phone: '+989120000000',
-          phoneVerified: true,
-          balance: 1000,
-        },
       });
 
-      if (user.balance === 0) {
+      if (!user) {
+        try {
+          user = await prisma.user.create({
+            data: {
+              telegramId: 'dev-test-user',
+              username: 'dev-test-user',
+              phoneVerified: true,
+              balance: 1000,
+            },
+          });
+        } catch (createErr) {
+          console.warn('Fallback finding dev user:', createErr);
+          user = await prisma.user.findFirst({
+            where: { telegramId: 'dev-test-user' },
+          });
+        }
+      }
+
+      if (user && user.balance === 0) {
         user = await prisma.user.update({
           where: { id: user.id },
           data: { balance: 1000 },
@@ -36,15 +46,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         user: {
-          id: user.id,
-          telegramId: user.telegramId,
-          username: user.username || 'dev-test-user',
-          avatarUrl: user.avatarUrl,
-          balance: user.balance,
-          blocked: user.blocked,
-          phone: user.phone || '+989120000000',
-          phoneVerified: user.phoneVerified ?? true,
-          referralCoinsEarned: (user as any).referralCoinsEarned || 0,
+          id: user?.id || 'dev-id',
+          telegramId: user?.telegramId || 'dev-test-user',
+          username: user?.username || 'dev-test-user',
+          avatarUrl: user?.avatarUrl || null,
+          balance: user?.balance ?? 1000,
+          blocked: user?.blocked ?? false,
+          phone: user?.phone || null,
+          phoneVerified: true,
+          referralCoinsEarned: (user as any)?.referralCoinsEarned || 0,
         },
       });
     }
@@ -104,8 +114,11 @@ export async function POST(request: NextRequest) {
       }
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Auth error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({
+      error: 'Internal server error',
+      details: error?.message || String(error),
+    }, { status: 500 });
   }
 } 

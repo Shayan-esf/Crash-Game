@@ -44,22 +44,11 @@ function CrashBetControls({
   const [betAmount, setBetAmount] = useState<number>(10);
   const [internalMultiplier, setInternalMultiplier] = useState<number>(1.0);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [autoCashoutEnabled, setAutoCashoutEnabled] = useState<boolean>(false);
-  const [autoCashoutTarget, setAutoCashoutTarget] = useState<number>(2.0);
   const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // همگام‌سازی برداشت خودکار بیرونی (انتخاب از روی بوم یا داک ری‌اکشن‌ها)
-  useEffect(() => {
-    if (externalAutoCashoutEnabled !== undefined) {
-      setAutoCashoutEnabled(externalAutoCashoutEnabled);
-    }
-  }, [externalAutoCashoutEnabled]);
-
-  useEffect(() => {
-    if (externalAutoCashoutTarget !== undefined) {
-      setAutoCashoutTarget(externalAutoCashoutTarget);
-    }
-  }, [externalAutoCashoutTarget]);
+  // برداشت خودکار کنترل‌شده از کامپوننت والد (بدون وضعیت موازی برای جلوگیری از نیاز به دوبار کلیک)
+  const autoCashoutEnabled = externalAutoCashoutEnabled ?? false;
+  const autoCashoutTarget = externalAutoCashoutTarget ?? 2.0;
 
   // ارسال مبلغ شرط انتخاب‌شده به کامپوننت والد جهت ارتقای ظاهر وسیله/موشک
   useEffect(() => {
@@ -68,14 +57,7 @@ function CrashBetControls({
     }
   }, [betAmount, onBetAmountChange]);
 
-  // ارسال تغییرات هدف برداشت خودکار به کامپوننت والد جهت هماهنگی با انیمیشن هواپیما
-  useEffect(() => {
-    if (onAutoCashoutChange) {
-      onAutoCashoutChange(autoCashoutEnabled, autoCashoutTarget);
-    }
-  }, [autoCashoutEnabled, autoCashoutTarget, onAutoCashoutChange]);
-
-  // محاسبه ایزوله ضریب بازی بدون درگیر کردن کامپوننت والد
+  // محاسبه ایزوله ضریب بازی هماهنگ با فرمول سرور
   useEffect(() => {
     if (currentMultiplier !== undefined) return; // در صورت دریافت ضریب بیرونی، از آن استفاده می‌شود
 
@@ -89,15 +71,23 @@ function CrashBetControls({
     }
 
     let animationFrameId: number;
+    const calculateCrashTime = (cp: number) => {
+      const seconds = Math.log(Math.max(1.01, cp)) / 0.06;
+      return Math.max(800, Math.round(seconds * 1000));
+    };
+
+    const effectiveCrashTime =
+      crashTime > 0 ? crashTime : calculateCrashTime(crashPoint || 1.0);
+    const targetCrashPoint = crashPoint > 1.0 ? crashPoint : null;
+
     const tick = () => {
       const elapsed = Math.max(0, Date.now() - startTime);
-      const totalCrashTime = crashTime > 0 ? crashTime : 20000;
-      const timeProgress = elapsed / totalCrashTime;
 
-      if (timeProgress >= 1) {
-        setInternalMultiplier(crashPoint || 1.0);
+      if (elapsed >= effectiveCrashTime) {
+        setInternalMultiplier(targetCrashPoint || Math.max(1.0, Math.exp(0.06 * (effectiveCrashTime / 1000))));
       } else {
-        const mult = Math.pow(Math.E, timeProgress * Math.log(Math.max(1, totalCrashTime / 1000)));
+        const rawMult = Math.max(1.0, Math.exp(0.06 * (elapsed / 1000)));
+        const mult = targetCrashPoint ? Math.min(targetCrashPoint, rawMult) : rawMult;
         setInternalMultiplier(mult);
         animationFrameId = requestAnimationFrame(tick);
       }
@@ -149,7 +139,7 @@ function CrashBetControls({
   };
 
   const handleCashoutClick = () => {
-    if (isProcessing || !userBet || userCashout || gameState !== 'flying') {
+    if (!userBet || userCashout || gameState !== 'flying') {
       return;
     }
 
@@ -162,7 +152,7 @@ function CrashBetControls({
     }
     processingTimeoutRef.current = setTimeout(() => {
       setIsProcessing(false);
-    }, 1000);
+    }, 800);
   };
 
   // بررسی اجرای خودکار برداشت در صورت رسیدن به ضریب هدف (Auto Cash Out)
@@ -189,8 +179,7 @@ function CrashBetControls({
   const canCashout =
     gameState === 'flying' &&
     Boolean(userBet) &&
-    !userCashout &&
-    !isProcessing;
+    !userCashout;
 
   const livePayout = userBet ? (userBet * activeMultiplier).toFixed(1) : '0.0';
 
@@ -270,7 +259,7 @@ function CrashBetControls({
               <input
                 type="checkbox"
                 checked={autoCashoutEnabled}
-                onChange={(e) => setAutoCashoutEnabled(e.target.checked)}
+                onChange={(e) => onAutoCashoutChange?.(e.target.checked, autoCashoutTarget)}
                 className="w-4 h-4 rounded text-yellow-500 bg-gray-800 border-gray-600 focus:ring-0 cursor-pointer accent-yellow-400"
               />
               <span className="text-xs font-bold text-gray-200">برداشت خودکار و ارتقای سفینه</span>
@@ -323,7 +312,7 @@ function CrashBetControls({
                     <button
                       key={preset}
                       type="button"
-                      onClick={() => setAutoCashoutTarget(preset)}
+                      onClick={() => onAutoCashoutChange?.(true, preset)}
                       className={`min-h-[36px] py-1 px-1 rounded-lg text-xs font-mono font-extrabold transition-all duration-150 flex flex-col items-center justify-center cursor-pointer ${
                         isSelected
                           ? isTier4

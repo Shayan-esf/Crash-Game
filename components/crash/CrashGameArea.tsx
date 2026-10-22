@@ -123,7 +123,7 @@ export default function CrashGameArea() {
 
   // انیمیشن محاسبه ضریب پرواز در مدار برای هماهنگی با بخش شبیه‌سازی
   useEffect(() => {
-    if (phase !== 'flying') {
+    if (phase !== 'flying' || !startTime) {
       if (phase === 'crashed') {
         setCurrentMultiplier(crashPoint || 1.0);
       } else {
@@ -133,14 +133,22 @@ export default function CrashGameArea() {
     }
 
     let animId: number;
+    const calculateCrashTime = (cp: number) => {
+      const seconds = Math.log(Math.max(1.01, cp)) / 0.06;
+      return Math.max(800, Math.round(seconds * 1000));
+    };
+
+    const effectiveCrashTime = crashTime > 0 ? crashTime : calculateCrashTime(crashPoint || 1.0);
+    const targetCrashPoint = crashPoint > 1.0 ? crashPoint : null;
+
     const tick = () => {
       const elapsed = Math.max(0, Date.now() - startTime);
-      const totalCrashTime = crashTime > 0 ? crashTime : 20000;
 
-      if (elapsed >= totalCrashTime) {
-        setCurrentMultiplier(crashPoint || 1.0);
+      if (elapsed >= effectiveCrashTime) {
+        setCurrentMultiplier(targetCrashPoint || Math.max(1.0, Math.exp(0.06 * (effectiveCrashTime / 1000))));
       } else {
-        const mult = Math.min(crashPoint || 1.0, Math.max(1.0, Math.exp(0.06 * (elapsed / 1000))));
+        const rawMult = Math.max(1.0, Math.exp(0.06 * (elapsed / 1000)));
+        const mult = targetCrashPoint ? Math.min(targetCrashPoint, rawMult) : rawMult;
         setCurrentMultiplier(mult);
         animId = requestAnimationFrame(tick);
       }
@@ -157,13 +165,20 @@ export default function CrashGameArea() {
     const lastEvent = lobbyEvents[lobbyEvents.length - 1];
     if (!lastEvent) return;
 
+    const calculateCrashTime = (cp: number) => {
+      const seconds = Math.log(Math.max(1.01, cp)) / 0.06;
+      return Math.max(800, Math.round(seconds * 1000));
+    };
+
     // در صورت تغییر sessionId (بازی جدید) — بازنشانی وضعیت
     if (lastEvent.type === 'game-start' && lastEvent.sessionId && lastEvent.sessionId !== sessionId) {
+      const cp = lastEvent.crashPoint || 1.0;
+      const ct = lastEvent.crashTime || calculateCrashTime(cp);
       setPhase('betting');
-      setCrashPoint(1.0);
-      setCrashTime(20000);
+      setCrashPoint(cp);
+      setCrashTime(ct);
       setStartTime(lastEvent.startTime || 0);
-      setDuration(lastEvent.duration || 20000);
+      setDuration(ct);
       setBetEndTime(lastEvent.betEndTime || 0);
       setSeed(String(lastEvent.seed ?? ''));
       setRoundHash(lastEvent.roundHash || '');
@@ -173,6 +188,7 @@ export default function CrashGameArea() {
       setUserCashout(null);
       setUserBetAmount(0);
       setCurrentMultiplier(1.0);
+      setIsProcessingBet(false);
       return;
     }
 
@@ -181,11 +197,13 @@ export default function CrashGameArea() {
     }
 
     if (lastEvent.type === 'sync') {
+      const cp = lastEvent.crashPoint || 1.0;
+      const ct = lastEvent.crashTime || calculateCrashTime(cp);
       setPhase(lastEvent.phase);
-      setCrashPoint(lastEvent.crashPoint);
-      setCrashTime(lastEvent.crashTime || 20000);
+      setCrashPoint(cp);
+      setCrashTime(ct);
       setStartTime(lastEvent.startTime);
-      setDuration(lastEvent.duration);
+      setDuration(ct);
       setBetEndTime(lastEvent.betEndTime);
       setSeed(String(lastEvent.seed ?? ''));
       setRoundHash(lastEvent.roundHash || '');
@@ -204,12 +222,15 @@ export default function CrashGameArea() {
       } else {
         setUserCashout(null);
       }
+      setIsProcessingBet(false);
     } else if (lastEvent.type === 'game-start') {
+      const cp = lastEvent.crashPoint || 1.0;
+      const ct = lastEvent.crashTime || calculateCrashTime(cp);
       setPhase('betting');
-      setCrashPoint(lastEvent.crashPoint);
-      setCrashTime(20000);
+      setCrashPoint(cp);
+      setCrashTime(ct);
       setStartTime(lastEvent.startTime);
-      setDuration(lastEvent.duration);
+      setDuration(ct);
       setBetEndTime(lastEvent.betEndTime);
       setSeed(String(lastEvent.seed ?? ''));
       setRoundHash(lastEvent.roundHash || '');
@@ -219,37 +240,44 @@ export default function CrashGameArea() {
       setUserCashout(null);
       setUserBetAmount(0);
       setCurrentMultiplier(1.0);
+      setIsProcessingBet(false);
     } else if (lastEvent.type === 'game-flying') {
+      const cp = lastEvent.crashPoint || crashPoint || 1.0;
+      const ct = lastEvent.crashTime || calculateCrashTime(cp);
       setPhase('flying');
-      setCrashPoint(lastEvent.crashPoint);
-      setCrashTime(lastEvent.crashTime || 20000);
+      setCrashPoint(cp);
+      setCrashTime(ct);
       setStartTime(lastEvent.startTime);
-      setDuration(lastEvent.duration);
+      setDuration(ct);
       setSeed(String(lastEvent.seed ?? ''));
       setSessionId(lastEvent.sessionId || '');
+      setIsProcessingBet(false);
     } else if (lastEvent.type === 'game-crash') {
+      const cp = lastEvent.crashPoint || 1.0;
+      const ct = lastEvent.crashTime || calculateCrashTime(cp);
       triggerHapticCrash();
       setPhase('crashed');
-      setCrashPoint(lastEvent.crashPoint);
-      setCrashTime(lastEvent.crashTime || 20000);
+      setCrashPoint(cp);
+      setCrashTime(ct);
       setStartTime(lastEvent.startTime);
-      setDuration(lastEvent.duration);
+      setDuration(ct);
       setSeed(String(lastEvent.seed ?? ''));
       setRoundHash(lastEvent.roundHash || '');
       setSalt(lastEvent.salt || '');
       setSessionId(lastEvent.sessionId || '');
-      setCurrentMultiplier(lastEvent.crashPoint || 1.0);
+      setCurrentMultiplier(cp);
+      setIsProcessingBet(false);
       // حفظ userBet و userCashout در فاز crashed برای نمایش وضعیت برد/باخت تا شروع راند بعدی
     } else if (lastEvent.type === 'balance-update') {
       setBalance(lastEvent.balance);
-    } else if (lastEvent.type === 'bet' && lastEvent.userId === wsUser?.id) {
+    } else if (lastEvent.type === 'bet-success' || (lastEvent.type === 'bet' && (lastEvent.userId === wsUser?.id || !lastEvent.userId))) {
       setUserBet(lastEvent.bet);
       setUserBetAmount(lastEvent.bet);
       setIsProcessingBet(false);
       if (betTimeoutRef.current) {
         clearTimeout(betTimeoutRef.current);
       }
-    } else if (lastEvent.type === 'cashout' && lastEvent.userId === wsUser?.id) {
+    } else if (lastEvent.type === 'cashout-success' || (lastEvent.type === 'cashout' && (lastEvent.userId === wsUser?.id || !lastEvent.userId))) {
       triggerHapticCashout();
       setUserCashout(lastEvent.multiplier);
       setIsProcessingBet(false);
@@ -264,11 +292,64 @@ export default function CrashGameArea() {
         username: lastEvent.username,
       });
     }
-  }, [lobbyEvents, setBalance, wsUser?.id, sessionId]);
+  }, [lobbyEvents, setBalance, wsUser?.id, sessionId, crashPoint]);
+
+  // شبیه‌ساز خودکار آفلاین برای زمانی که وب‌سوکت هنوز وصل نشده (دمو زنده)
+  useEffect(() => {
+    if (connected) return;
+
+    let timeoutId: NodeJS.Timeout;
+    const runSimulationLoop = () => {
+      // ۱. شروع فاز ثبت شرط (۴ ثانیه)
+      setPhase('betting');
+      const now = Date.now();
+      const bEndTime = now + 4000;
+      setBetEndTime(bEndTime);
+      setDuration(4000);
+      setCurrentMultiplier(1.0);
+      setUserBet(null);
+      setUserCashout(null);
+      setUserBetAmount(0);
+
+      timeoutId = setTimeout(() => {
+        // ۲. شروع فاز پرواز موشک (بین ۱.۳x تا ۴.۵x رندوم)
+        const simCrashPoint = parseFloat((1.3 + Math.random() * 3.2).toFixed(2));
+        const simCrashTime = Math.max(2500, Math.round((Math.log(simCrashPoint) / 0.06) * 1000));
+        const flightStart = Date.now();
+
+        setPhase('flying');
+        setStartTime(flightStart);
+        setCrashPoint(simCrashPoint);
+        setCrashTime(simCrashTime);
+        setDuration(simCrashTime);
+
+        timeoutId = setTimeout(() => {
+          // ۳. کرش موشک
+          setPhase('crashed');
+          triggerHapticCrash();
+          setCurrentMultiplier(simCrashPoint);
+
+          timeoutId = setTimeout(() => {
+            runSimulationLoop();
+          }, 3000);
+        }, simCrashTime);
+      }, 4000);
+    };
+
+    runSimulationLoop();
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [connected]);
 
   const handlePlaceBet = useCallback(
     (amount: number) => {
-      if (phase !== 'betting' || balance < amount || isProcessingBet || !connected) {
+      if (!connected) {
+        alert('⚠️ سرور آنلاین وب‌سوکت در حال حاضر متصل نیست. در حالت نمایشی امکان ثبت شرط واقعی وجود ندارد.');
+        return;
+      }
+      if (phase !== 'betting' || balance < amount || isProcessingBet) {
         return;
       }
       setIsProcessingBet(true);
@@ -284,18 +365,23 @@ export default function CrashGameArea() {
   );
 
   const handleCashout = useCallback(() => {
-    if (phase !== 'flying' || userBetAmount === 0 || userCashout || isProcessingBet || !connected) return;
+    if (!connected) {
+      alert('⚠️ سرور آنلاین وب‌سوکت در حال حاضر متصل نیست.');
+      return;
+    }
+    const betToCashout = userBetAmount > 0 ? userBetAmount : (userBet || 0);
+    if (phase !== 'flying' || betToCashout === 0 || userCashout) return;
 
     setIsProcessingBet(true);
-    sendCashout(userBetAmount);
+    sendCashout(betToCashout);
 
     if (betTimeoutRef.current) {
       clearTimeout(betTimeoutRef.current);
     }
     betTimeoutRef.current = setTimeout(() => {
       setIsProcessingBet(false);
-    }, 2000);
-  }, [phase, userBetAmount, userCashout, isProcessingBet, connected, sendCashout]);
+    }, 1500);
+  }, [phase, userBetAmount, userBet, userCashout, connected, sendCashout]);
 
   const handleBetAmountChange = useCallback((amount: number) => {
     setSelectedBetAmount(amount);
@@ -327,31 +413,7 @@ export default function CrashGameArea() {
     [autoCashoutEnabled, autoCashoutTarget, phase, userBet, userBetAmount, userCashout, currentMultiplier, handleCashout]
   );
 
-  // وضعیت بارگذاری / اتصال به سرور بازی: بعد از ۴ ثانیه فال‌بک آفلاین لوکال فعال می‌شود تا کاربر گیر نکند
-  const [forceShow, setForceShow] = useState(false);
-  useEffect(() => {
-    const t = setTimeout(() => setForceShow(true), 3500);
-    return () => clearTimeout(t);
-  }, []);
-
-  if (!connected && !forceShow) {
-    return (
-      <div className="w-full max-w-[483px] mx-auto min-h-[420px] flex flex-col items-center justify-center p-6 text-center">
-        <div className="relative mb-5 flex items-center justify-center">
-          <div className="w-16 h-16 rounded-full bg-yellow-400/10 border border-yellow-400/30 flex items-center justify-center animate-pulse motion-reduce:animate-none">
-            <Rocket className="w-8 h-8 text-yellow-400" />
-          </div>
-          <div className="absolute -inset-1.5 rounded-full border border-yellow-400/20 animate-ping opacity-40 pointer-events-none motion-reduce:animate-none" />
-        </div>
-        <h3 className="text-lg font-bold text-white tracking-wide mb-1.5">
-          در حال اتصال به سرور بازی
-        </h3>
-        <p className="text-xs text-gray-400 max-w-[280px] leading-relaxed font-mono">
-          همگام‌سازی تله‌متری و موجودی سکه...
-        </p>
-      </div>
-    );
-  }
+  // نمایش مستقیم بازی بدون گیر کردن در لودینگ؛ وضعیت اتصال زنده با نشانگر در بالای بوم نشان داده می‌شود
 
   return (
     <div className="w-full flex flex-col items-center">

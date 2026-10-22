@@ -57,8 +57,11 @@ export async function GET(request: NextRequest) {
     }));
 
     return NextResponse.json({ games: formattedGames });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching user games:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({
+      error: 'Internal server error',
+      details: error?.message || String(error)
+    }, { status: 500 });
   }
 } 

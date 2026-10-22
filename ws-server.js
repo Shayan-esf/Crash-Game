@@ -73,29 +73,27 @@ async function generateCrashPoint(seed) {
   return 1.1 + rng.random() * 0.4;
 }
 
+// نرخ رشد نمایی استاندارد ضریب بازی
+const MULTIPLIER_GROWTH_RATE = 0.06;
+
+function getMultiplierAt(elapsedMs) {
+  const seconds = Math.max(0, elapsedMs) / 1000;
+  return Math.max(1.0, Math.exp(MULTIPLIER_GROWTH_RATE * seconds));
+}
+
+function calculateCrashTime(crashPoint) {
+  const seconds = Math.log(Math.max(1.01, crashPoint)) / MULTIPLIER_GROWTH_RATE;
+  return Math.max(800, Math.round(seconds * 1000));
+}
+
 // محاسبه ضریب لحظه‌ای در زمان واقعی
-function calculateCurrentMultiplier(seed, elapsedTime) {
-  const rng = new (class {
-    constructor(seed) { this.seed = seed; }
-    random() { this.seed = (this.seed * 9301 + 49297) % 233280; return this.seed / 233280; }
-  })(seed);
-
-  // رشد نمایی همراه با تعیین تصادفی لحظه انفجار
-  const maxTime = 20000; // حداکثر ۲۰ ثانیه
-  const timeProgress = elapsedTime / maxTime;
-
-  // تولید تصادفی لحظه کرش (۱ الی ۲۰ ثانیه)
-  const crashTime = 1 + rng.random() * 19; // بین ۱ تا ۲۰ ثانیه
-  const crashProgress = crashTime / 20;
-
-  // اگر زمان سپری‌شده بیشتر از لحظه کرش باشد - بازی تمام است
-  if (timeProgress >= crashProgress) {
+function calculateCurrentMultiplier(_seed, elapsedTime, crashPoint, crashTime) {
+  const effectiveCrashTime = crashTime || (crashPoint ? calculateCrashTime(crashPoint) : 20000);
+  if (elapsedTime >= effectiveCrashTime) {
     return null; // انفجار
   }
-
-  // رشد نمایی ضریب
-  const multiplier = Math.pow(Math.E, timeProgress * 2.5);
-  return multiplier;
+  const mult = getMultiplierAt(elapsedTime);
+  return crashPoint ? Math.min(crashPoint, mult) : mult;
 }
 
 // دریافت تاریخچه سشن از پایگاه داده
@@ -142,10 +140,10 @@ async function startNewGame() {
 
     const seed = Math.floor(Math.random() * 1000000); // سید ۶ رقمی
     const salt = crypto.randomBytes(16).toString('hex');
-    const betDuration = 15000; // ۱۵ ثانیه زمان شرط‌بندی
-    const flightDuration = 20000; // زمان ثابت پرواز ۲۰ ثانیه
+    const betDuration = 10000; // ۱۰ ثانیه زمان شرط‌بندی
     const rawCrashPoint = await generateCrashPoint(seed);
     const crashPoint = parseFloat(rawCrashPoint.toFixed(2));
+    const crashTime = calculateCrashTime(crashPoint);
     const roundHash = crypto.createHmac('sha256', salt).update(`${seed}:${crashPoint.toFixed(2)}`).digest('hex');
 
     currentGame = {
@@ -154,14 +152,15 @@ async function startNewGame() {
       salt,
       roundHash,
       crashPoint,
+      crashTime,
       startTime: Date.now() + betDuration, // شروع پرواز
       betEndTime: Date.now() + betDuration,
-      duration: flightDuration,
+      duration: crashTime,
       bets: [],
       phase: 'betting',
     };
 
-    console.log(`Starting new game - Session: ${currentSession.id}, Seed: ${seed}, CrashPoint: ${crashPoint}, Hash: ${roundHash}`);
+    console.log(`Starting new game - Session: ${currentSession.id}, Seed: ${seed}, CrashPoint: ${crashPoint}, CrashTime: ${crashTime}ms, Hash: ${roundHash}`);
 
     // ۱. فاز ثبت شرط
     pub.publish(LOBBY_CHANNEL, JSON.stringify({
@@ -173,7 +172,9 @@ async function startNewGame() {
       betDuration,
       startTime: currentGame.startTime,
       betEndTime: currentGame.betEndTime,
-      duration: flightDuration
+      crashPoint: currentGame.crashPoint,
+      crashTime: currentGame.crashTime,
+      duration: currentGame.crashTime
     }));
 
     // ۲. پس از betDuration — فاز پرواز موشک
@@ -198,14 +199,15 @@ async function startNewGame() {
         sessionId: currentSession.id,
         seed,
         crashPoint: currentGame.crashPoint,
+        crashTime: currentGame.crashTime,
         startTime: currentGame.startTime,
-        duration: currentGame.duration
+        duration: currentGame.crashTime
       }));
 
-      // ۳. پس از duration — انفجار موشک
+      // ۳. پس از crashTime — انفجار موشک
       gameTimer = setTimeout(() => {
         endGame();
-      }, currentGame.duration);
+      }, currentGame.crashTime);
     }, betDuration);
   } catch (error) {
     console.error('Error starting new game:', error);
@@ -440,7 +442,7 @@ async function syncUserStateAndSession(ws) {
 
     const elapsed = currentGame.phase === 'flying' ? Math.max(0, Date.now() - currentGame.startTime) : 0;
     const currentMultiplier = currentGame.phase === 'flying'
-      ? (calculateCurrentMultiplier(currentGame.seed, elapsed) || currentGame.crashPoint || 1.0)
+      ? (calculateCurrentMultiplier(currentGame.seed, elapsed, currentGame.crashPoint, currentGame.crashTime) || currentGame.crashPoint || 1.0)
       : (currentGame.phase === 'crashed' ? (currentGame.crashPoint || 1.0) : 1.0);
 
     let userBet = null;
@@ -492,9 +494,9 @@ async function syncUserStateAndSession(ws) {
       roundHash: currentGame.roundHash,
       salt: currentGame.phase === 'crashed' ? currentGame.salt : undefined,
       crashPoint: currentGame.crashPoint,
-      crashTime: currentGame.duration || 20000,
+      crashTime: currentGame.crashTime || currentGame.duration || 20000,
       startTime: currentGame.phase === 'betting' ? currentGame.betEndTime : currentGame.startTime,
-      duration: currentGame.duration,
+      duration: currentGame.crashTime || currentGame.duration || 20000,
       betEndTime: currentGame.betEndTime,
       now: Date.now(),
       currentMultiplier,
@@ -527,14 +529,16 @@ wss.on('connection', (ws) => {
 
   // SYNC: ارسال وضعیت به‌روز به کلاینت جدید
   if (currentGame) {
+    const effectiveCrashTime = currentGame.crashTime || calculateCrashTime(currentGame.crashPoint);
     ws.send(JSON.stringify({
       type: 'sync',
       phase: currentGame.phase,
       sessionId: currentSession?.id,
       seed: currentGame.seed,
       crashPoint: currentGame.crashPoint,
+      crashTime: effectiveCrashTime,
       startTime: currentGame.phase === 'betting' ? currentGame.betEndTime : currentGame.startTime,
-      duration: currentGame.duration,
+      duration: effectiveCrashTime,
       betEndTime: currentGame.betEndTime,
       now: Date.now(),
     }));
@@ -558,7 +562,7 @@ wss.on('connection', (ws) => {
       console.log('NODE_ENV:', process.env.NODE_ENV);
 
       // حالت DEV برای تست و توسعه
-      if (!data.initData) {
+      if (!data.initData || data.initData === 'dev') {
         console.log('[DEV MODE] Skipping Telegram auth, creating test user');
         try {
           let user = await prisma.user.upsert({
@@ -765,6 +769,11 @@ wss.on('connection', (ws) => {
           type: 'balance-update',
           balance: result.updatedUser.balance
         }));
+        ws.send(JSON.stringify({
+          type: 'bet-success',
+          bet,
+          userId: ws.user.id
+        }));
         console.log('Bet received:', bet, 'from user:', ws.user.username, 'userId:', ws.user.id, 'New balance:', result.updatedUser.balance);
         // افزودن به بازی جاری
         if (currentGame) {
@@ -814,15 +823,18 @@ wss.on('connection', (ws) => {
 
       // محاسبه لحظه‌ای ضریب روی سرور
       const elapsed = Math.max(0, Date.now() - currentGame.startTime);
-      const multiplier = calculateCurrentMultiplier(currentGame.seed, elapsed);
+      const effectiveCrashTime = currentGame.crashTime || calculateCrashTime(currentGame.crashPoint);
 
-      console.log('[CASHOUT] Server calculated multiplier:', multiplier?.toFixed(4) || 'CRASH', 'elapsed:', elapsed);
-
-      if (!multiplier) {
+      if (elapsed >= effectiveCrashTime) {
         cashoutInProgress.delete(lockKey);
         ws.send(JSON.stringify({ error: 'موشک منفجر شده است' }));
         return;
       }
+
+      const rawMultiplier = getMultiplierAt(elapsed);
+      const multiplier = Math.min(currentGame.crashPoint, parseFloat(rawMultiplier.toFixed(2)));
+
+      console.log('[CASHOUT] Server calculated multiplier:', multiplier, 'elapsed:', elapsed, 'crashPoint:', currentGame.crashPoint);
 
       try {
         // به‌روزرسانی بازی در دیتابیس با بررسی اتمیک وضعیت
@@ -906,6 +918,15 @@ wss.on('connection', (ws) => {
 
         ws.send(JSON.stringify({
           type: 'balance-update',
+          balance: result.updatedUser.balance
+        }));
+
+        ws.send(JSON.stringify({
+          type: 'cashout-success',
+          userId: ws.user.id,
+          bet: result.totalBet,
+          multiplier,
+          winnings: result.totalWinnings,
           balance: result.updatedUser.balance
         }));
 

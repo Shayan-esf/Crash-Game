@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // دریافت ۱۰ برد برتر (بیشترین سود در کش‌اوت)
     const records = await prisma.game.findMany({
@@ -30,18 +30,21 @@ export async function GET(request: NextRequest) {
     // قالب‌بندی داده‌ها برای فرانت‌اند
     const topRecords = records.map(record => ({
       id: record.id,
-      username: record.user.username,
+      username: record.user?.username || 'خلبان کیهانی',
       bet: record.bet,
       cashout: record.cashout,
       profit: record.profit,
       winnings: record.cashout ? record.bet * record.cashout : 0,
-      crashPoint: record.gameSession?.crashPoint,
+      crashPoint: record.gameSession?.crashPoint ?? null,
       createdAt: record.createdAt
     }));
 
     return NextResponse.json({ records: topRecords });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching top records:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({
+      error: 'Internal server error',
+      details: error?.message || String(error)
+    }, { status: 500 });
   }
 } 
