@@ -136,12 +136,11 @@ export default function CrashGameArea() {
     const tick = () => {
       const elapsed = Math.max(0, Date.now() - startTime);
       const totalCrashTime = crashTime > 0 ? crashTime : 20000;
-      const progress = elapsed / totalCrashTime;
 
-      if (progress >= 1) {
+      if (elapsed >= totalCrashTime) {
         setCurrentMultiplier(crashPoint || 1.0);
       } else {
-        const mult = Math.pow(Math.E, progress * Math.log(Math.max(1, totalCrashTime / 1000)));
+        const mult = Math.min(crashPoint || 1.0, Math.max(1.0, Math.exp(0.06 * (elapsed / 1000))));
         setCurrentMultiplier(mult);
         animId = requestAnimationFrame(tick);
       }
@@ -328,8 +327,14 @@ export default function CrashGameArea() {
     [autoCashoutEnabled, autoCashoutTarget, phase, userBet, userBetAmount, userCashout, currentMultiplier, handleCashout]
   );
 
-  // وضعیت بارگذاری / اتصال به سرور بازی
-  if (!connected) {
+  // وضعیت بارگذاری / اتصال به سرور بازی: بعد از ۴ ثانیه فال‌بک آفلاین لوکال فعال می‌شود تا کاربر گیر نکند
+  const [forceShow, setForceShow] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setForceShow(true), 3500);
+    return () => clearTimeout(t);
+  }, []);
+
+  if (!connected && !forceShow) {
     return (
       <div className="w-full max-w-[483px] mx-auto min-h-[420px] flex flex-col items-center justify-center p-6 text-center">
         <div className="relative mb-5 flex items-center justify-center">
