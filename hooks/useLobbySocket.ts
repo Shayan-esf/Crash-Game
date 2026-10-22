@@ -27,7 +27,12 @@ export function useLobbySocket({ initData }: { initData: string }) {
     if (wsRef.current) {
       wsRef.current.close();
     }
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || `ws://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:4001`;
+    // تشخیص هوشمند: در لوکال‌هاست مستقیم به 4001 وصل شو، در ورسل/پروداکشن به کلادفلر
+    const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    const wsUrl = isLocalhost
+      ? 'ws://localhost:4001'
+      : (process.env.NEXT_PUBLIC_WS_URL || 'wss://founder-precise-quebec-pts.trycloudflare.com');
+
     console.log('[useLobbySocket] Connecting to WebSocket URL:', wsUrl);
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
