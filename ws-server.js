@@ -743,15 +743,19 @@ wss.on('connection', (ws) => {
             select: { balance: true }
           });
           // ایجاد رکورد شرط
+          const gameData = {
+            userId: ws.user.id,
+            gameSessionId: currentSession.id,
+            bet,
+            crashPoint: currentGame.crashPoint,
+            profit: 0,
+            status: 'waiting'
+          };
+          if (data.theme) {
+            gameData.theme = data.theme;
+          }
           const game = await tx.game.create({
-            data: {
-              userId: ws.user.id,
-              gameSessionId: currentSession.id,
-              bet,
-              crashPoint: currentGame.crashPoint,
-              profit: 0,
-              status: 'waiting'
-            }
+            data: gameData
           });
           return { updatedUser, game };
         });

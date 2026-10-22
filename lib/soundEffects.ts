@@ -217,3 +217,174 @@ export function playLaunchSound() {
     // ignore
   }
 }
+
+/**
+ * Chip tier upgrade sound (Shockwave power-up chime)
+ */
+export function playUpgradeSound(tier: number = 2) {
+  if (!soundEnabled) return;
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  try {
+    const now = ctx.currentTime;
+    const notes = tier === 3 ? [440, 554.37, 659.25, 880] : [523.25, 659.25, 783.99]; // A major 7 or C major power chord
+
+    notes.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = tier === 3 ? 'sawtooth' : 'triangle';
+      const noteStart = now + idx * 0.045;
+      osc.frequency.setValueAtTime(freq * 0.8, noteStart);
+      osc.frequency.exponentialRampToValueAtTime(freq, noteStart + 0.08);
+
+      gain.gain.setValueAtTime(0.001, noteStart);
+      gain.gain.linearRampToValueAtTime(tier === 3 ? 0.22 : 0.16, noteStart + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, noteStart + 0.22);
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(tier === 3 ? 3200 : 2200, noteStart);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(noteStart);
+      osc.stop(noteStart + 0.25);
+    });
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Supercar engine rev & nitro whoosh (Theme 2)
+ */
+export function playEngineRevSound(tier: number = 1, multiplier: number = 1) {
+  if (!soundEnabled) return;
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  try {
+    const now = ctx.currentTime;
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    const baseFreq = tier === 3 ? 85 : tier === 2 ? 75 : 65;
+    const targetFreq = baseFreq + Math.min(multiplier * 35, 180);
+
+    osc1.type = 'sawtooth';
+    osc1.frequency.setValueAtTime(baseFreq, now);
+    osc1.frequency.exponentialRampToValueAtTime(targetFreq, now + 0.3);
+
+    osc2.type = 'triangle';
+    osc2.frequency.setValueAtTime(baseFreq * 1.5, now);
+    osc2.frequency.exponentialRampToValueAtTime(targetFreq * 1.5, now + 0.3);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(tier === 3 ? 950 : 750, now);
+    filter.frequency.exponentialRampToValueAtTime(tier === 3 ? 1800 : 1200, now + 0.3);
+
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(tier === 3 ? 0.22 : 0.15, now + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+    osc1.connect(filter);
+    osc2.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc1.start(now);
+    osc2.start(now);
+    osc1.stop(now + 0.38);
+    osc2.stop(now + 0.38);
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Cosmic rocket ion thruster rumble (Theme 1)
+ */
+export function playRocketThrusterSound(tier: number = 1, multiplier: number = 1) {
+  if (!soundEnabled) return;
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  try {
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    const baseFreq = 50 + Math.min(multiplier * 20, 110);
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(baseFreq, now);
+    osc.frequency.exponentialRampToValueAtTime(baseFreq + 25, now + 0.3);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(260 + (tier === 3 ? 180 : tier === 2 ? 90 : 0), now);
+
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(tier === 3 ? 0.25 : 0.18, now + 0.06);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.38);
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Candlestick live chart market ticker blip (Theme 3)
+ */
+export function playMarketPingSound(tier: number = 1, multiplier: number = 1) {
+  if (!soundEnabled) return;
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  try {
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    const baseFreq = 700 + Math.min(multiplier * 120, 1400);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(baseFreq, now);
+    osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.35, now + 0.08);
+
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(tier === 3 ? 0.16 : 0.1, now + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.14);
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Central theme-aware flight sound trigger
+ */
+export function playThemeFlightSound(theme: 'racing' | 'rocket' | 'chart', tier: number = 1, multiplier: number = 1) {
+  if (theme === 'racing') {
+    playEngineRevSound(tier, multiplier);
+  } else if (theme === 'chart') {
+    playMarketPingSound(tier, multiplier);
+  } else {
+    playRocketThrusterSound(tier, multiplier);
+  }
+}

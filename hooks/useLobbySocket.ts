@@ -87,9 +87,9 @@ export function useLobbySocket({ initData }: { initData: string }) {
   }, []);
 
   // ارسال شرط
-  const sendBet = useCallback((bet: number) => {
+  const sendBet = useCallback((bet: number, theme?: string) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    wsRef.current.send(JSON.stringify({ type: 'bet', bet }));
+    wsRef.current.send(JSON.stringify({ type: 'bet', bet, theme }));
   }, []);
 
   // ارسال درخواست کش‌اوت (برداشت سود)
@@ -104,10 +104,10 @@ export function useLobbySocket({ initData }: { initData: string }) {
     wsRef.current.send(JSON.stringify(event));
   }, []);
 
-  // ارسال ری‌اکشن آیکونی زنده روی موشک
-  const sendReaction = useCallback((reaction: 'rocket' | 'flame' | 'zap' | 'trophy') => {
+  // ارسال ری‌اکشن آیکونی زنده روی موشک با ضریب مشخص
+  const sendReaction = useCallback((reaction: 'rocket' | 'flame' | 'zap' | 'trophy', multiplier?: number) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    wsRef.current.send(JSON.stringify({ type: 'reaction', reaction }));
+    wsRef.current.send(JSON.stringify({ type: 'reaction', reaction, multiplier }));
   }, []);
 
   return {

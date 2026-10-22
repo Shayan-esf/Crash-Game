@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
       profit: game.profit,
       status: game.status,
       crashPoint: game.crashPoint ?? game.gameSession?.crashPoint ?? null,
+      theme: (game as any).theme || 'rocket',
       createdAt: game.createdAt
     }));
 

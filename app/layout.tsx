@@ -19,7 +19,9 @@ export const metadata: Metadata = {
   },
   description: 'مینی‌اپ تلگرامی بازی انفجار کیهانی (Crash Game) - پرواز موشک در فضا، تله‌متری زنده و ضرایب صعودی',
   applicationName: 'انفجار کیهانی',
-  authors: [{ name: 'Cosmic Arcade' }],
+  authors: [{ name: 'Shayan' }],
+  creator: 'Shayan',
+  publisher: 'Shayan',
   keywords: [
     'بازی انفجار',
     'کرش گیم',

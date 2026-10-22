@@ -114,14 +114,18 @@ class WebSocketController {
         });
 
         // ایجاد رکورد شرط
+        const gameData = {
+          userId: ws.user.id,
+          gameSessionId: this.gameService.getCurrentSession().id,
+          bet,
+          profit: 0,
+          status: 'waiting'
+        };
+        if (data.theme) {
+          gameData.theme = data.theme;
+        }
         const game = await tx.game.create({
-          data: {
-            userId: ws.user.id,
-            gameSessionId: this.gameService.getCurrentSession().id,
-            bet,
-            profit: 0,
-            status: 'waiting'
-          }
+          data: gameData
         });
 
         return { updatedUser, game };
@@ -281,10 +285,17 @@ class WebSocketController {
     const reaction = data.reaction;
     if (!['rocket', 'flame', 'zap', 'trophy'].includes(reaction)) return;
 
+    const multiplier = typeof data.multiplier === 'number' ? data.multiplier : (
+      reaction === 'rocket' ? 1.5 :
+      reaction === 'flame' ? 2.0 :
+      reaction === 'zap' ? 5.0 : 10.0
+    );
+
     const payload = {
       type: 'reaction',
       id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       reaction,
+      multiplier,
       userId: ws.user?.id || 'guest',
       username: ws.user?.username || ws.user?.firstName || 'خلبان',
       createdAt: Date.now()

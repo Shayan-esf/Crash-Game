@@ -69,3 +69,6 @@ npm run ws-new
 - **Dependency Injection** - تزریق وابستگی‌ها از طریق سازنده
 - **Configuration First** - تمرکز تمام تنظیمات در یک نقطه
 - **Error Handling** - مدیریت متمرکز و یکپارچه خطاها
+
+---
+توسعه‌دهنده: شایان (Shayan)

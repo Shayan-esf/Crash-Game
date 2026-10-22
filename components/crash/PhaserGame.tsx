@@ -1,7 +1,12 @@
 'use client';
 
 import { useStore } from '@/lib/store';
-import { triggerHapticCountdown, triggerHapticCrash } from '@/lib/telegramHaptics';
+import {
+  playLaunchSound,
+  playThemeFlightSound,
+  playUpgradeSound,
+} from '@/lib/soundEffects';
+import { triggerHaptic, triggerHapticCountdown, triggerHapticCrash } from '@/lib/telegramHaptics';
 import { memo, useEffect, useRef } from 'react';
 
 export type CrashTheme = 'rocket' | 'racing' | 'chart';
@@ -20,8 +25,9 @@ export interface PhaserGameProps {
   sessionId: string;
   targetMultiplier?: number | null;
   theme?: CrashTheme;
-  betTier?: 1 | 2 | 3;
+  betTier?: number;
   betAmount?: number;
+  upgradePulse?: { tier: number; id: number };
 }
 
 interface Star {
@@ -106,112 +112,19 @@ interface SkidMark {
   alpha: number;
 }
 
-function drawCheckeredFlags(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  scale: number,
-  flutter: number
-) {
-  ctx.save();
-  ctx.translate(x, y);
-
-  // پرچم چپ (-28 درجه)
-  ctx.save();
-  ctx.rotate(-0.48);
-  ctx.strokeStyle = '#f59e0b';
-  ctx.lineWidth = 2 * scale;
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.lineTo(0, -22 * scale);
-  ctx.stroke();
-  ctx.fillStyle = '#fbbf24';
-  ctx.beginPath();
-  ctx.arc(0, -22 * scale, 2.5 * scale, 0, Math.PI * 2);
-  ctx.fill();
-
-  const fw = 13 * scale;
-  const fh = 9 * scale;
-  for (let r = 0; r < 3; r++) {
-    for (let c = 0; c < 3; c++) {
-      ctx.fillStyle = (r + c) % 2 === 0 ? '#090a10' : '#ffffff';
-      const wave = Math.sin(flutter + c * 0.9) * (1.5 * scale);
-      ctx.fillRect(-fw + c * (fw / 3), -22 * scale + r * (fh / 3) + wave, fw / 3 + 0.5, fh / 3 + 0.5);
-    }
-  }
-  ctx.restore();
-
-  // پرچم راست (+28 درجه)
-  ctx.save();
-  ctx.rotate(0.48);
-  ctx.strokeStyle = '#f59e0b';
-  ctx.lineWidth = 2 * scale;
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.lineTo(0, -22 * scale);
-  ctx.stroke();
-  ctx.fillStyle = '#fbbf24';
-  ctx.beginPath();
-  ctx.arc(0, -22 * scale, 2.5 * scale, 0, Math.PI * 2);
-  ctx.fill();
-
-  for (let r = 0; r < 3; r++) {
-    for (let c = 0; c < 3; c++) {
-      ctx.fillStyle = (r + c) % 2 === 0 ? '#090a10' : '#ffffff';
-      const wave = Math.sin(flutter + Math.PI + c * 0.9) * (1.5 * scale);
-      ctx.fillRect(c * (fw / 3), -22 * scale + r * (fh / 3) + wave, fw / 3 + 0.5, fh / 3 + 0.5);
-    }
-  }
-  ctx.restore();
-
-  ctx.restore();
-}
-
-function drawTrophyCup(ctx: CanvasRenderingContext2D, x: number, y: number, scale: number) {
-  ctx.save();
-  ctx.translate(x, y);
-
-  // پایه کاپ
-  ctx.fillStyle = '#92400e';
-  ctx.fillRect(-9 * scale, 10 * scale, 18 * scale, 4 * scale);
-  ctx.fillStyle = '#b45309';
-  ctx.fillRect(-6 * scale, 6 * scale, 12 * scale, 4 * scale);
-
-  // ساقه
-  ctx.fillStyle = '#fbbf24';
-  ctx.fillRect(-2.5 * scale, 1 * scale, 5 * scale, 5 * scale);
-
-  // کاسه کاپ
-  const cupGrad = ctx.createLinearGradient(-10 * scale, -14 * scale, 10 * scale, 1 * scale);
-  cupGrad.addColorStop(0, '#fef08a');
-  cupGrad.addColorStop(0.5, '#f59e0b');
-  cupGrad.addColorStop(1, '#b45309');
-  ctx.fillStyle = cupGrad;
-  ctx.beginPath();
-  ctx.moveTo(-10 * scale, -13 * scale);
-  ctx.lineTo(10 * scale, -13 * scale);
-  ctx.bezierCurveTo(9 * scale, -2 * scale, 6 * scale, 1 * scale, 0, 1 * scale);
-  ctx.bezierCurveTo(-6 * scale, 1 * scale, -9 * scale, -2 * scale, -10 * scale, -13 * scale);
-  ctx.closePath();
-  ctx.fill();
-
-  // دسته‌های کاپ
-  ctx.strokeStyle = '#fbbf24';
-  ctx.lineWidth = 1.8 * scale;
-  ctx.beginPath();
-  ctx.arc(-10 * scale, -7 * scale, 4.5 * scale, Math.PI * 0.5, Math.PI * 1.5);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(10 * scale, -7 * scale, 4.5 * scale, -Math.PI * 0.5, Math.PI * 0.5);
-  ctx.stroke();
-
-  // ستاره درخشان روی کاپ
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.arc(0, -6 * scale, 2 * scale, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.restore();
+interface Shockwave {
+  x: number;
+  y: number;
+  tier: number;
+  startTime: number;
+  duration: number;
+  maxRadius: number;
+  sparks: {
+    angle: number;
+    speed: number;
+    length: number;
+    dist: number;
+  }[];
 }
 
 function drawRoadBarrier(
@@ -347,190 +260,6 @@ function drawSpaceAsteroid(
   ctx.restore();
 }
 
-function drawThemeDisplayScreen(
-  ctx: CanvasRenderingContext2D,
-  cx: number,
-  cy: number,
-  w: number,
-  theme: CrashTheme,
-  phase: 'betting' | 'flying' | 'crashed',
-  userBet: number | null | undefined,
-  userCashout: number | null | undefined,
-  currentMultiplier: number,
-  crashPoint: number,
-  now: number
-) {
-  const panelW = Math.min(w * 0.76, 240);
-  const panelH = 50;
-  const scale = panelW / 240;
-  const isWon = Boolean(userCashout);
-  const isCrashed = phase === 'crashed' && !isWon;
-
-  ctx.save();
-  ctx.translate(cx, cy);
-
-  // شیشه پنل نمایشگر دیجیتال
-  const bgGrad = ctx.createLinearGradient(0, -panelH / 2, 0, panelH / 2);
-  bgGrad.addColorStop(0, 'rgba(10, 14, 26, 0.94)');
-  bgGrad.addColorStop(1, 'rgba(4, 7, 15, 0.96)');
-  ctx.fillStyle = bgGrad;
-
-  const borderColor = isWon
-    ? '#fbbf24'
-    : isCrashed
-    ? '#ef4444'
-    : theme === 'racing'
-    ? '#f59e0b'
-    : theme === 'chart'
-    ? '#10b981'
-    : '#06b6d4';
-
-  ctx.strokeStyle = borderColor;
-  ctx.lineWidth = isWon ? 1.8 : 1.2;
-  ctx.shadowColor = borderColor;
-  ctx.shadowBlur = isWon ? 14 : isCrashed ? 10 : 6;
-
-  ctx.beginPath();
-  ctx.roundRect(-panelW / 2, -panelH / 2, panelW, panelH, 8);
-  ctx.fill();
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-
-  // گوشه‌های سایبرنتیک نمایشگر
-  const cw = 6 * scale;
-  ctx.strokeStyle = isWon ? '#fef08a' : '#ffffff';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(-panelW / 2 + cw + 3, -panelH / 2 + 3);
-  ctx.lineTo(-panelW / 2 + 3, -panelH / 2 + 3);
-  ctx.lineTo(-panelW / 2 + 3, -panelH / 2 + cw + 3);
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.moveTo(panelW / 2 - cw - 3, panelH / 2 - 3);
-  ctx.lineTo(panelW / 2 - 3, panelH / 2 - 3);
-  ctx.lineTo(panelW / 2 - 3, panelH / 2 - cw - 3);
-  ctx.stroke();
-
-  if (isWon) {
-    // --- نماد پیروزی روی نمایشگر ---
-    if (theme === 'racing') {
-      // پرچم‌های شطرنجی پیروزی در سمت چپ
-      drawCheckeredFlags(ctx, -panelW / 2 + 28 * scale, 5 * scale, scale * 1.1, now * 0.008);
-      // کاپ طلایی قهرمانی در وسط
-      drawTrophyCup(ctx, -panelW / 2 + 65 * scale, 2 * scale, scale * 0.95);
-    } else if (theme === 'chart') {
-      drawTrophyCup(ctx, -panelW / 2 + 34 * scale, 2 * scale, scale * 1.05);
-      ctx.save();
-      ctx.strokeStyle = '#10b981';
-      ctx.lineWidth = 2 * scale;
-      ctx.beginPath();
-      ctx.arc(-panelW / 2 + 66 * scale, 0, 7 * scale, 0, Math.PI);
-      ctx.stroke();
-      ctx.restore();
-    } else {
-      drawTrophyCup(ctx, -panelW / 2 + 34 * scale, 2 * scale, scale * 1.05);
-      ctx.fillStyle = '#fef08a';
-      ctx.beginPath();
-      ctx.arc(-panelW / 2 + 66 * scale, 0, 4 * scale, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    ctx.direction = 'rtl';
-    ctx.textAlign = 'right';
-
-    ctx.font = `800 ${Math.round(11 * scale)}px Vazirmatn, sans-serif`;
-    ctx.fillStyle = '#fef08a';
-    const wonTitle =
-      theme === 'racing'
-        ? 'پیروزی مسابقه • برد قطعی'
-        : theme === 'chart'
-        ? 'تارگت سود • موفقیت معاملاتی'
-        : 'ماموریت موفق • پرواز در مدار';
-    ctx.fillText(wonTitle, panelW / 2 - 12 * scale, -panelH / 2 + 18 * scale);
-
-    const wonCoins = ((userBet || 10) * (userCashout || 1.0)).toFixed(1);
-    ctx.font = `800 ${Math.round(12 * scale)}px ui-monospace, Vazirmatn, sans-serif`;
-    ctx.fillStyle = '#34d399';
-    ctx.fillText(`+${wonCoins} سکه (${userCashout?.toFixed(2)}x)`, panelW / 2 - 12 * scale, panelH / 2 - 12 * scale);
-  } else if (isCrashed) {
-    // --- هشدار برخورد / ریزش روی نمایشگر ---
-    const strobe = Math.sin(now * 0.018) > 0;
-    ctx.save();
-    ctx.fillStyle = strobe ? '#ef4444' : '#b91c1c';
-    ctx.strokeStyle = '#fef08a';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(-panelW / 2 + 30 * scale, -13 * scale);
-    ctx.lineTo(-panelW / 2 + 44 * scale, 13 * scale);
-    ctx.lineTo(-panelW / 2 + 16 * scale, 13 * scale);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#ffffff';
-    ctx.font = `900 ${Math.round(12 * scale)}px monospace`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('!', -panelW / 2 + 30 * scale, 3 * scale);
-    ctx.restore();
-
-    ctx.direction = 'rtl';
-    ctx.textAlign = 'right';
-
-    ctx.font = `800 ${Math.round(11 * scale)}px Vazirmatn, sans-serif`;
-    ctx.fillStyle = '#f87171';
-    const crashTitle =
-      theme === 'racing'
-        ? 'تصادف شدید • برخورد با مانع'
-        : theme === 'chart'
-        ? 'شکست حمایت • ریزش بازار'
-        : 'برخورد سیارک • انفجار مدار';
-    ctx.fillText(crashTitle, panelW / 2 - 12 * scale, -panelH / 2 + 18 * scale);
-
-    ctx.font = `700 ${Math.round(11 * scale)}px Vazirmatn, ui-monospace, sans-serif`;
-    ctx.fillStyle = '#cbd5e1';
-    ctx.fillText(`ضریب پایان: ${crashPoint.toFixed(2)}x`, panelW / 2 - 12 * scale, panelH / 2 - 12 * scale);
-  } else if (phase === 'flying') {
-    // --- وضعیت تله‌متری زنده در حالت پرواز / حرکت ---
-    ctx.direction = 'rtl';
-    ctx.textAlign = 'right';
-
-    ctx.font = `800 ${Math.round(10.5 * scale)}px Vazirmatn, sans-serif`;
-    ctx.fillStyle = theme === 'racing' ? '#fbbf24' : theme === 'chart' ? '#34d399' : '#38bdf8';
-    const flightTitle =
-      theme === 'racing'
-        ? 'تله‌متری داشبورد • نیترو فعال'
-        : theme === 'chart'
-        ? 'دفترچه سفارشات • جریان صعودی'
-        : 'رایانه پرواز • شتاب مداری';
-    ctx.fillText(flightTitle, panelW / 2 - 12 * scale, -panelH / 2 + 17 * scale);
-
-    const barW = panelW * 0.45;
-    const barH = 5 * scale;
-    const barX = -panelW / 2 + 16 * scale;
-    const barY = -2 * scale;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-    ctx.fillRect(barX, barY, barW, barH);
-    const fillPercent = Math.min(1, (currentMultiplier - 1.0) / 4);
-    ctx.fillStyle = theme === 'racing' ? '#f59e0b' : theme === 'chart' ? '#10b981' : '#06b6d4';
-    ctx.fillRect(barX, barY, barW * fillPercent, barH);
-
-    ctx.direction = 'ltr';
-    ctx.textAlign = 'right';
-    ctx.font = `700 ${Math.round(10 * scale)}px ui-monospace, monospace`;
-    ctx.fillStyle = '#94a3b8';
-    const subText =
-      theme === 'racing'
-        ? `${(180 + currentMultiplier * 55).toFixed(0)} KM/H`
-        : theme === 'chart'
-        ? `+${(currentMultiplier * 7.5).toFixed(1)}% VOL`
-        : `MACH ${(5 + currentMultiplier * 2.2).toFixed(1)}`;
-    ctx.fillText(subText, panelW / 2 - 12 * scale, panelH / 2 - 12 * scale);
-  }
-
-  ctx.restore();
-}
-
 const SKIN_CONFIGS: Record<
   string,
   {
@@ -581,6 +310,567 @@ const SKIN_CONFIGS: Record<
   },
 };
 
+function drawCheckeredFlags(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Left Flag (angled left)
+  ctx.save();
+  ctx.rotate(-0.35);
+  ctx.strokeStyle = '#d4d4d8';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, size * 0.7);
+  ctx.lineTo(0, -size * 0.6);
+  ctx.stroke();
+
+  ctx.fillStyle = '#facc15';
+  ctx.beginPath();
+  ctx.arc(0, -size * 0.6, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  const fw = size * 0.65;
+  const fh = size * 0.45;
+  const cellW = fw / 4;
+  const cellH = fh / 3;
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 4; c++) {
+      ctx.fillStyle = (r + c) % 2 === 0 ? '#ffffff' : '#09090b';
+      ctx.fillRect(-fw + c * cellW, -size * 0.55 + r * cellH, cellW, cellH);
+    }
+  }
+  ctx.restore();
+
+  // Right Flag (angled right)
+  ctx.save();
+  ctx.rotate(0.35);
+  ctx.strokeStyle = '#d4d4d8';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, size * 0.7);
+  ctx.lineTo(0, -size * 0.6);
+  ctx.stroke();
+
+  ctx.fillStyle = '#facc15';
+  ctx.beginPath();
+  ctx.arc(0, -size * 0.6, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 4; c++) {
+      ctx.fillStyle = (r + c) % 2 === 0 ? '#09090b' : '#ffffff';
+      ctx.fillRect(c * cellW, -size * 0.55 + r * cellH, cellW, cellH);
+    }
+  }
+  ctx.restore();
+
+  ctx.restore();
+}
+
+function drawTrophyCup(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  const goldGrad = ctx.createLinearGradient(-size * 0.4, 0, size * 0.4, 0);
+  goldGrad.addColorStop(0, '#fef08a');
+  goldGrad.addColorStop(0.3, '#f59e0b');
+  goldGrad.addColorStop(0.7, '#d97706');
+  goldGrad.addColorStop(1, '#92400e');
+
+  // Base
+  ctx.fillStyle = '#1c1917';
+  ctx.strokeStyle = '#facc15';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(-size * 0.35, size * 0.3, size * 0.7, size * 0.2, 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Stem
+  ctx.fillStyle = goldGrad;
+  ctx.fillRect(-size * 0.08, size * 0.1, size * 0.16, size * 0.22);
+
+  // Cup Chalice
+  ctx.fillStyle = goldGrad;
+  ctx.beginPath();
+  ctx.moveTo(-size * 0.32, -size * 0.4);
+  ctx.lineTo(size * 0.32, -size * 0.4);
+  ctx.quadraticCurveTo(size * 0.3, size * 0.12, 0, size * 0.14);
+  ctx.quadraticCurveTo(-size * 0.3, size * 0.12, -size * 0.32, -size * 0.4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#fef08a';
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+
+  // Handles
+  ctx.strokeStyle = '#facc15';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(-size * 0.34, -size * 0.16, size * 0.14, Math.PI * 0.5, Math.PI * 1.5, false);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(size * 0.34, -size * 0.16, size * 0.14, Math.PI * 1.5, Math.PI * 0.5, false);
+  ctx.stroke();
+
+  // Center star
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(0, -size * 0.16, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawThemeDisplayScreen(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  w: number,
+  theme: CrashTheme,
+  phase: 'betting' | 'flying' | 'crashed',
+  userBet: number | null | undefined,
+  userCashout: number | null | undefined,
+  currentMultiplier: number,
+  crashPoint: number,
+  betTier: number,
+  betAmount: number,
+  now: number
+) {
+  const panelW = Math.min(w * 0.76, 230);
+  const panelH = 44;
+  const isWon = Boolean(userCashout);
+  const isCrashed = phase === 'crashed' && !isWon;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+
+  ctx.fillStyle = isWon
+    ? 'rgba(19, 24, 12, 0.88)'
+    : isCrashed
+    ? 'rgba(38, 12, 12, 0.9)'
+    : 'rgba(8, 12, 22, 0.85)';
+  ctx.strokeStyle = isWon
+    ? '#facc15'
+    : isCrashed
+    ? '#ef4444'
+    : betTier === 3
+    ? 'rgba(250, 204, 21, 0.65)'
+    : betTier === 2
+    ? 'rgba(6, 182, 212, 0.65)'
+    : 'rgba(245, 158, 11, 0.45)';
+  ctx.lineWidth = isWon || isCrashed ? 2 : 1.2;
+
+  if (isWon) {
+    ctx.shadowColor = '#facc15';
+    ctx.shadowBlur = 14;
+  } else if (isCrashed) {
+    ctx.shadowColor = '#ef4444';
+    ctx.shadowBlur = 12;
+  }
+
+  ctx.beginPath();
+  ctx.roundRect(-panelW / 2, -panelH / 2, panelW, panelH, 10);
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Scanline overlay
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+  ctx.lineWidth = 1;
+  for (let sl = -panelH / 2 + 4; sl < panelH / 2; sl += 4) {
+    ctx.beginPath();
+    ctx.moveTo(-panelW / 2 + 6, sl);
+    ctx.lineTo(panelW / 2 - 6, sl);
+    ctx.stroke();
+  }
+
+  if (isWon) {
+    if (theme === 'racing') {
+      drawCheckeredFlags(ctx, -panelW * 0.35, 0, 24);
+      drawTrophyCup(ctx, panelW * 0.35, 0, 24);
+    } else {
+      drawTrophyCup(ctx, -panelW * 0.35, 0, 24);
+      drawTrophyCup(ctx, panelW * 0.35, 0, 24);
+    }
+
+    ctx.direction = 'rtl';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#fef08a';
+    ctx.font = '700 12px Vazirmatn, sans-serif';
+    ctx.fillText('پیروزی و ثبت سود! 🏆', 0, -8);
+
+    ctx.font = '800 11px ui-monospace, monospace';
+    ctx.fillStyle = '#4ade80';
+    const profit = userBet && userCashout ? ((userCashout - 1) * userBet).toFixed(0) : null;
+    ctx.fillText(profit ? `سود: +${profit} (${userCashout?.toFixed(2)}x)` : `برداشت: ${userCashout?.toFixed(2)}x`, 0, 10);
+  } else if (isCrashed) {
+    const flash = Math.sin(now * 0.02) > 0;
+    ctx.direction = 'rtl';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = flash ? '#ef4444' : '#fca5a5';
+    ctx.font = '800 12px Vazirmatn, sans-serif';
+    const crashTitle =
+      theme === 'racing'
+        ? '⚠️ برخورد با مانع!'
+        : theme === 'chart'
+        ? '⚠️ شکست خط حمایت!'
+        : '⚠️ انفجار و کرش!';
+    ctx.fillText(crashTitle, 0, -8);
+
+    ctx.font = '700 11px ui-monospace, monospace';
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillText(`کرش در ضریب: ${crashPoint?.toFixed(2)}x`, 0, 10);
+  } else {
+    const tierName =
+      theme === 'racing'
+        ? betTier === 3
+          ? `👑 هایپرکار ${betAmount}`
+          : betTier === 2
+          ? `⚡ توربو V12 ${betAmount}`
+          : `🏎️ اسپرت کوپه ${betAmount}`
+        : theme === 'chart'
+        ? betTier === 3
+          ? `👑 وال VIP ${betAmount}`
+          : betTier === 2
+          ? `⚡ تریدر پرو ${betAmount}`
+          : `📊 اسکالپ ${betAmount}`
+        : betTier === 3
+        ? `👑 ناو کیهانی ${betAmount}`
+        : betTier === 2
+        ? `⚡ شاتل توربو ${betAmount}`
+        : `🚀 فالکون ${betAmount}`;
+
+    const tierColor = betTier === 3 ? '#facc15' : betTier === 2 ? '#38bdf8' : '#f59e0b';
+
+    ctx.direction = 'rtl';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = tierColor;
+    ctx.font = '700 12px Vazirmatn, sans-serif';
+    ctx.fillText(tierName, 0, -8);
+
+    ctx.direction = 'ltr';
+    ctx.font = '600 10px ui-monospace, monospace';
+    ctx.fillStyle = '#94a3b8';
+    if (theme === 'racing') {
+      const speed = phase === 'flying' ? (180 + Math.min(currentMultiplier * 60, 420)).toFixed(0) : '0';
+      ctx.fillText(`SPEED: ${speed} KM/H  •  BOOST: TIER ${betTier}`, 0, 10);
+    } else if (theme === 'chart') {
+      ctx.fillText(`RSI: 68.4  •  VOL: ${(betTier * 4.2).toFixed(1)}M  •  TIER ${betTier}`, 0, 10);
+    } else {
+      const alt = phase === 'flying' ? (1200 + Math.min(currentMultiplier * 850, 9500)).toFixed(0) : '0';
+      ctx.fillText(`ALT: ${alt} KM  •  WARP TIER ${betTier}`, 0, 10);
+    }
+  }
+
+  ctx.restore();
+}
+
+function drawRocketCraft(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  rotation: number,
+  betTier: number,
+  skin: (typeof SKIN_CONFIGS)['default'],
+  isFlying: boolean,
+  currentMultiplier: number,
+  now: number,
+  rocketImg: HTMLImageElement | null
+) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rotation);
+
+  // 1. TIER 3 & 2 AURA SHIELD
+  if (betTier === 3) {
+    ctx.save();
+    const auraRot = (now * 0.0018) % (Math.PI * 2);
+    ctx.strokeStyle = 'rgba(250, 204, 21, 0.75)';
+    ctx.shadowColor = '#f59e0b';
+    ctx.shadowBlur = 16;
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.ellipse(0, -2, 34, 46, auraRot, 0, Math.PI * 2);
+    ctx.stroke();
+
+    for (let i = 0; i < 4; i++) {
+      const pAngle = auraRot + (i * Math.PI) / 2;
+      const px = Math.cos(pAngle) * 34;
+      const py = -2 + Math.sin(pAngle) * 46;
+      ctx.fillStyle = '#fef08a';
+      ctx.beginPath();
+      ctx.arc(px, py, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  } else if (betTier === 2) {
+    ctx.save();
+    const pulse = 0.5 + Math.sin(now * 0.006) * 0.3;
+    ctx.strokeStyle = `rgba(6, 182, 212, ${pulse})`;
+    ctx.shadowColor = '#06b6d4';
+    ctx.shadowBlur = 10;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 28, 38, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 2. EXHAUST FLAMES (When Flying)
+  if (isFlying) {
+    const boostMult = Math.min(currentMultiplier * 2, 25);
+    const flameLength = (skin.name.includes('ققنوس') ? 44 : 36) + (betTier === 3 ? 14 : betTier === 2 ? 8 : 0) + boostMult + Math.sin(now * 0.06) * 6;
+
+    if (betTier === 3) {
+      for (const offX of [-16, -6, 6, 16]) {
+        const dFlame = flameLength * (Math.abs(offX) > 10 ? 0.9 : 1.15);
+        const dGrad = ctx.createLinearGradient(0, 22, 0, 22 + dFlame);
+        dGrad.addColorStop(0, '#ffffff');
+        dGrad.addColorStop(0.2, '#fef08a');
+        dGrad.addColorStop(0.5, '#f59e0b');
+        dGrad.addColorStop(0.8, '#a855f7');
+        dGrad.addColorStop(1, 'rgba(168, 85, 247, 0)');
+        ctx.fillStyle = dGrad;
+        ctx.beginPath();
+        ctx.ellipse(offX, 22 + dFlame * 0.45, 4.2, dFlame * 0.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (betTier === 2) {
+      const mainGrad = ctx.createLinearGradient(0, 22, 0, 22 + flameLength);
+      mainGrad.addColorStop(0, skin.flameColors[0]);
+      mainGrad.addColorStop(0.35, skin.flameColors[1]);
+      mainGrad.addColorStop(1, skin.flameColors[2]);
+      ctx.fillStyle = mainGrad;
+      ctx.beginPath();
+      ctx.ellipse(0, 22 + flameLength * 0.45, 7.5, flameLength * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      for (const offX of [-18, 18]) {
+        const auxFlame = flameLength * 0.85;
+        const auxGrad = ctx.createLinearGradient(0, 18, 0, 18 + auxFlame);
+        auxGrad.addColorStop(0, '#ffffff');
+        auxGrad.addColorStop(0.3, '#67e8f9');
+        auxGrad.addColorStop(0.7, '#06b6d4');
+        auxGrad.addColorStop(1, 'rgba(6, 182, 212, 0)');
+        ctx.fillStyle = auxGrad;
+        ctx.beginPath();
+        ctx.ellipse(offX, 18 + auxFlame * 0.45, 3.8, auxFlame * 0.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else {
+      const flameGrad = ctx.createLinearGradient(0, 22, 0, 22 + flameLength);
+      flameGrad.addColorStop(0, skin.flameColors[0]);
+      flameGrad.addColorStop(0.35, skin.flameColors[1]);
+      flameGrad.addColorStop(1, skin.flameColors[2]);
+      ctx.fillStyle = flameGrad;
+      ctx.beginPath();
+      ctx.ellipse(0, 22 + flameLength * 0.45, 8.5, flameLength * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // 3. PHYSICAL CRAFT MORPHOLOGY BY TIER
+  if (betTier === 3) {
+    // TIER 3: IMPERIAL QUANTUM DREADNOUGHT (👑)
+    ctx.save();
+    const wingGrad = ctx.createLinearGradient(-36, 0, 36, 0);
+    wingGrad.addColorStop(0, '#1c1917');
+    wingGrad.addColorStop(0.5, '#78350f');
+    wingGrad.addColorStop(1, '#1c1917');
+    ctx.fillStyle = wingGrad;
+    ctx.strokeStyle = '#facc15';
+    ctx.lineWidth = 1.8;
+    ctx.shadowColor = '#f59e0b';
+    ctx.shadowBlur = 10;
+
+    // Left Wing & Warp Nacelle
+    ctx.beginPath();
+    ctx.moveTo(-12, -4);
+    ctx.lineTo(-34, 10);
+    ctx.lineTo(-32, 22);
+    ctx.lineTo(-14, 18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Right Wing & Warp Nacelle
+    ctx.beginPath();
+    ctx.moveTo(12, -4);
+    ctx.lineTo(34, 10);
+    ctx.lineTo(32, 22);
+    ctx.lineTo(14, 18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Glowing Tachyon Coils
+    ctx.fillStyle = '#22d3ee';
+    ctx.shadowColor = '#22d3ee';
+    ctx.shadowBlur = 8;
+    ctx.fillRect(-33, 12, 3, 8);
+    ctx.fillRect(30, 12, 3, 8);
+    ctx.restore();
+
+    if (rocketImg && rocketImg.complete) {
+      ctx.drawImage(rocketImg, -20, -28, 40, 56);
+    } else {
+      ctx.fillStyle = '#1c1917';
+      ctx.strokeStyle = '#facc15';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(0, -30);
+      ctx.lineTo(13, -8);
+      ctx.lineTo(13, 20);
+      ctx.lineTo(-13, 20);
+      ctx.lineTo(-13, -8);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Imperial Gold Armor Bands
+    ctx.fillStyle = 'rgba(250, 204, 21, 0.85)';
+    ctx.fillRect(-10, -8, 20, 3);
+    ctx.fillRect(-12, 4, 24, 3);
+
+    // Crown Crest 👑
+    ctx.save();
+    ctx.translate(0, -14);
+    ctx.fillStyle = '#facc15';
+    ctx.strokeStyle = '#fef08a';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-6, 4);
+    ctx.lineTo(-7, -2);
+    ctx.lineTo(-3, 1);
+    ctx.lineTo(0, -4);
+    ctx.lineTo(3, 1);
+    ctx.lineTo(7, -2);
+    ctx.lineTo(6, 4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    // Quad Titanium Nozzles
+    ctx.fillStyle = '#facc15';
+    for (const offX of [-16, -6, 6, 16]) {
+      ctx.fillRect(offX - 2.5, 20, 5, 4);
+    }
+  } else if (betTier === 2) {
+    // TIER 2: ORBITAL TWIN-BOOSTER HEAVY SHUTTLE (⚡)
+    ctx.save();
+    for (const offX of [-18, 18]) {
+      const bGrad = ctx.createLinearGradient(offX - 5, 0, offX + 5, 0);
+      bGrad.addColorStop(0, '#0f172a');
+      bGrad.addColorStop(0.5, '#1e293b');
+      bGrad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = bGrad;
+      ctx.strokeStyle = '#06b6d4';
+      ctx.lineWidth = 1.2;
+
+      ctx.beginPath();
+      ctx.moveTo(offX, -16);
+      ctx.lineTo(offX + 5, -6);
+      ctx.lineTo(offX + 5, 18);
+      ctx.lineTo(offX - 5, 18);
+      ctx.lineTo(offX - 5, -6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#22d3ee';
+      ctx.beginPath();
+      ctx.moveTo(offX, -16);
+      ctx.lineTo(offX + 5, -6);
+      ctx.lineTo(offX - 5, -6);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = '#475569';
+      ctx.fillRect(offX < 0 ? offX + 4 : offX - 7, -2, 4, 3);
+      ctx.fillRect(offX < 0 ? offX + 4 : offX - 7, 10, 4, 3);
+
+      ctx.fillStyle = '#06b6d4';
+      ctx.fillRect(offX - 3, 18, 6, 3);
+    }
+    ctx.restore();
+
+    if (rocketImg && rocketImg.complete) {
+      ctx.drawImage(rocketImg, -20, -28, 40, 56);
+    } else {
+      ctx.fillStyle = skin.hullColor;
+      ctx.strokeStyle = skin.accentColor;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, -28);
+      ctx.lineTo(10, -8);
+      ctx.lineTo(10, 18);
+      ctx.lineTo(-10, 18);
+      ctx.lineTo(-10, -8);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = '#22d3ee';
+    ctx.fillRect(-8, -4, 16, 2.5);
+
+    ctx.fillStyle = '#06b6d4';
+    ctx.fillRect(-12, 14, 24, 2);
+  } else {
+    // TIER 1: FALCON SCOUT ROCKET
+    if (rocketImg && rocketImg.complete) {
+      ctx.drawImage(rocketImg, -20, -28, 40, 56);
+    } else {
+      ctx.fillStyle = skin.hullColor;
+      ctx.strokeStyle = skin.accentColor;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, -28);
+      ctx.lineTo(10, -8);
+      ctx.lineTo(10, 18);
+      ctx.lineTo(-10, 18);
+      ctx.lineTo(-10, -8);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = skin.accentColor;
+      ctx.beginPath();
+      ctx.moveTo(0, -28);
+      ctx.lineTo(10, -8);
+      ctx.lineTo(-10, -8);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    ctx.fillStyle = '#ef4444';
+    ctx.beginPath();
+    ctx.moveTo(-10, 10);
+    ctx.lineTo(-18, 20);
+    ctx.lineTo(-10, 18);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(10, 10);
+    ctx.lineTo(18, 20);
+    ctx.lineTo(10, 18);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillRect(-5, 18, 10, 4);
+  }
+
+  ctx.restore();
+}
+
 function PhaserGame({
   phase,
   startTime,
@@ -597,6 +887,7 @@ function PhaserGame({
   theme = 'racing',
   betTier = 1,
   betAmount = 10,
+  upgradePulse,
 }: PhaserGameProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -632,8 +923,14 @@ function PhaserGame({
   const rocketYRef = useRef<number>(0);
   const targetMultiplierRef = useRef<number | null>(targetMultiplier);
   const themeRef = useRef<CrashTheme>(theme);
-  const betTierRef = useRef<1 | 2 | 3>(betTier);
+  const betTierRef = useRef<number>(betTier);
   const betAmountRef = useRef<number>(betAmount);
+
+  // Synchronous sync on every render pass so 60fps loop responds instantly to props
+  betTierRef.current = betTier;
+  betAmountRef.current = betAmount;
+  themeRef.current = theme;
+  targetMultiplierRef.current = targetMultiplier;
 
   const selectedSkin = useStore((state) => state.selectedSkin);
   const selectedSkinRef = useRef<string>(selectedSkin || 'default');
@@ -650,8 +947,65 @@ function PhaserGame({
     themeRef.current = theme;
   }, [theme]);
 
+  const shockwavesRef = useRef<Shockwave[]>([]);
+  const lastUpgradeIdRef = useRef<number>(0);
+  const prevBetTierRef = useRef<number>(betTier);
+  const lastFlightSoundTimeRef = useRef<number>(0);
+
+  const triggerShockwave = (tier: number) => {
+    const { w, h } = sizeRef.current;
+    const currentActiveTheme = themeRef.current;
+    let targetX = w / 2;
+    let targetY = h * 0.72;
+    if (currentActiveTheme === 'rocket') {
+      targetY = rocketYRef.current || (h * 0.52);
+    } else if (currentActiveTheme === 'chart') {
+      targetX = w - 85;
+      targetY = h * 0.5;
+    }
+
+    const sparkCount = tier === 3 ? 14 : 9;
+    const sparks = [];
+    for (let i = 0; i < sparkCount; i++) {
+      sparks.push({
+        angle: (i / sparkCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.35,
+        speed: 1.5 + Math.random() * 3.5,
+        length: 12 + Math.random() * (tier === 3 ? 24 : 16),
+        dist: 15 + Math.random() * 35,
+      });
+    }
+
+    shockwavesRef.current.push({
+      x: targetX,
+      y: targetY,
+      tier,
+      startTime: Date.now(),
+      duration: tier === 3 ? 850 : 650,
+      maxRadius: tier === 3 ? Math.min(w * 0.35, 140) : Math.min(w * 0.28, 110),
+      sparks,
+    });
+
+    if (shockwavesRef.current.length > 5) {
+      shockwavesRef.current.shift();
+    }
+
+    playUpgradeSound(tier);
+    triggerHaptic('heavy');
+  };
+
+  useEffect(() => {
+    if (upgradePulse && upgradePulse.tier >= 2 && upgradePulse.id !== lastUpgradeIdRef.current) {
+      lastUpgradeIdRef.current = upgradePulse.id;
+      triggerShockwave(upgradePulse.tier);
+    }
+  }, [upgradePulse]);
+
   useEffect(() => {
     betTierRef.current = betTier;
+    if (betTier >= 2 && betTier !== prevBetTierRef.current) {
+      triggerShockwave(betTier);
+    }
+    prevBetTierRef.current = betTier;
   }, [betTier]);
 
   useEffect(() => {
@@ -794,7 +1148,10 @@ function PhaserGame({
 
   // Handle phase changes & crash triggers
   useEffect(() => {
-    if (phase === 'crashed' && lastPhaseRef.current !== 'crashed') {
+    if (phase === 'flying' && lastPhaseRef.current !== 'flying') {
+      playLaunchSound();
+      lastFlightSoundTimeRef.current = Date.now();
+    } else if (phase === 'crashed' && lastPhaseRef.current !== 'crashed') {
       const { w, h } = sizeRef.current;
       const currentActiveTheme = themeRef.current;
       const targetY =
@@ -968,6 +1325,8 @@ function PhaserGame({
       const now = Date.now();
       nowRef.lastTime = now;
       const currentActiveTheme = themeRef.current;
+      const betTier = betTierRef.current || 1;
+      const betAmount = betAmountRef.current || 10;
 
       // 1. Calculate live multiplier and flight dynamics
       let currentMultiplier = 1.0;
@@ -984,6 +1343,15 @@ function PhaserGame({
         }
       } else if (phase === 'crashed') {
         currentMultiplier = crashPoint || 1.0;
+      }
+
+      // Theme-specific dynamic Web Audio SFX (acceleration & nitro rev)
+      if (phase === 'flying') {
+        const soundInterval = Math.max(420, 750 - Math.min(currentMultiplier * 35, 330));
+        if (now - lastFlightSoundTimeRef.current >= soundInterval) {
+          lastFlightSoundTimeRef.current = now;
+          playThemeFlightSound(currentActiveTheme, betTier, currentMultiplier);
+        }
       }
 
       // Screen shake offset during initial crash explosion (350ms)
@@ -1089,6 +1457,23 @@ function PhaserGame({
           ctx.stroke();
         }
         ctx.restore();
+
+        // Skid marks on asphalt from heavy braking / crash
+        if (skidMarksRef.current.length > 0) {
+          ctx.save();
+          for (let sm = skidMarksRef.current.length - 1; sm >= 0; sm--) {
+            const mark = skidMarksRef.current[sm];
+            ctx.strokeStyle = `rgba(15, 23, 42, ${mark.alpha})`;
+            ctx.lineWidth = 4.5;
+            ctx.beginPath();
+            ctx.moveTo(mark.leftX, mark.startY);
+            ctx.lineTo(mark.leftX, mark.endY);
+            ctx.moveTo(mark.rightX, mark.startY);
+            ctx.lineTo(mark.rightX, mark.endY);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
 
         // Speed warp horizontal streaks in flight
         if (phase === 'flying') {
@@ -1236,47 +1621,111 @@ function PhaserGame({
           ctx.rotate(Math.sin(now * 0.007) * 0.03);
         }
 
+        // --- 3-TIER RACING VEHICLE RENDERING ---
+        // Tier 1 (10): Sport Coupe (52px, Graphite, Single Wing, Dual Exhaust)
+        // Tier 2 (50): Turbo V12 GT (62px, Midnight Blue, Cyan Underglow & Stripes, Quad Tips)
+        // Tier 3 (100): Cyber Hypercar (72px Widebody, Imperial Gold & Carbon, Triple-Deck Wing, Ram-Air Scoop, Plasma Torches)
+        const carWidth = betTier === 3 ? 72 : betTier === 2 ? 62 : 52;
+        const carHalfW = carWidth / 2;
+        const carHeight = betTier === 3 ? 32 : betTier === 2 ? 30 : 28;
+        const carHalfH = carHeight / 2;
+
+        // Ground Neon Underglow on Asphalt
+        if (betTier === 3) {
+          ctx.save();
+          ctx.fillStyle = 'rgba(234, 179, 8, 0.45)';
+          ctx.shadowColor = '#eab308';
+          ctx.shadowBlur = 24;
+          ctx.beginPath();
+          ctx.ellipse(0, 16, 44, 11, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        } else if (betTier === 2) {
+          ctx.save();
+          ctx.fillStyle = 'rgba(6, 182, 212, 0.38)';
+          ctx.shadowColor = '#06b6d4';
+          ctx.shadowBlur = 18;
+          ctx.beginPath();
+          ctx.ellipse(0, 16, 36, 9, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
         // Nitro exhaust thrust flame in flight
         if (phase === 'flying') {
           const flameFlicker = Math.sin(now * 0.08) * 4;
-          const flameLen = 22 + flameFlicker + Math.min(currentMultiplier * 4, 35);
+          const flameLen = (betTier === 3 ? 34 : betTier === 2 ? 28 : 22) + flameFlicker + Math.min(currentMultiplier * 4, 38);
 
-          // Left Exhaust Flame
-          const leftFlame = ctx.createLinearGradient(0, 16, 0, 16 + flameLen);
-          leftFlame.addColorStop(0, '#38bdf8');
-          leftFlame.addColorStop(0.4, '#f59e0b');
-          leftFlame.addColorStop(1, 'rgba(239, 68, 68, 0)');
-          ctx.fillStyle = leftFlame;
-          ctx.beginPath();
-          ctx.ellipse(-14, 16 + flameLen * 0.45, 4.5, flameLen * 0.5, 0, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Right Exhaust Flame
-          ctx.beginPath();
-          ctx.ellipse(14, 16 + flameLen * 0.45, 4.5, flameLen * 0.5, 0, 0, Math.PI * 2);
-          ctx.fill();
+          if (betTier === 3) {
+            // Quad Center-Mount Titanium Afterburners with Concentric Plasma Flames
+            const exhaustOffsets = [-18, -6, 6, 18];
+            for (const offX of exhaustOffsets) {
+              const flameGrad = ctx.createLinearGradient(0, 16, 0, 16 + flameLen);
+              flameGrad.addColorStop(0, '#38bdf8');
+              flameGrad.addColorStop(0.35, '#c084fc');
+              flameGrad.addColorStop(0.7, '#f59e0b');
+              flameGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
+              ctx.fillStyle = flameGrad;
+              ctx.beginPath();
+              ctx.ellipse(offX, 16 + flameLen * 0.45, 3.8, flameLen * 0.5, 0, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          } else if (betTier === 2) {
+            // Quad Titanium Exhaust Tips (Dual Pairs)
+            const exhaustOffsets = [-17, -9, 9, 17];
+            for (const offX of exhaustOffsets) {
+              const flameGrad = ctx.createLinearGradient(0, 16, 0, 16 + flameLen);
+              flameGrad.addColorStop(0, '#22d3ee');
+              flameGrad.addColorStop(0.4, '#f59e0b');
+              flameGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
+              ctx.fillStyle = flameGrad;
+              ctx.beginPath();
+              ctx.ellipse(offX, 16 + flameLen * 0.45, 3.2, flameLen * 0.5, 0, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          } else {
+            // Dual Standard Exhaust Flame (Tier 1)
+            const exhaustOffsets = [-14, 14];
+            for (const offX of exhaustOffsets) {
+              const flameGrad = ctx.createLinearGradient(0, 16, 0, 16 + flameLen);
+              flameGrad.addColorStop(0, '#38bdf8');
+              flameGrad.addColorStop(0.4, '#f59e0b');
+              flameGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
+              ctx.fillStyle = flameGrad;
+              ctx.beginPath();
+              ctx.ellipse(offX, 16 + flameLen * 0.45, 4.5, flameLen * 0.5, 0, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
 
           // Spawn tire asphalt smoke & sparks
           if (Math.random() > 0.3) {
+            const sparkColor =
+              betTier === 3
+                ? Math.random() > 0.4 ? '#facc15' : '#c084fc'
+                : betTier === 2
+                ? Math.random() > 0.4 ? '#06b6d4' : '#f59e0b'
+                : Math.random() > 0.5 ? '#f59e0b' : '#64748b';
+
             exhaustParticlesRef.current.push({
-              x: carX - 16 + (Math.random() - 0.5) * 8,
+              x: carX - carHalfW * 0.6 + (Math.random() - 0.5) * 8,
               y: carY + 14,
               vx: (Math.random() - 0.5) * 1.5,
               vy: 2 + Math.random() * 4,
               size: 2.5 + Math.random() * 3.5,
-              alpha: 0.6,
-              color: Math.random() > 0.5 ? '#f59e0b' : '#64748b',
+              alpha: 0.65,
+              color: sparkColor,
               life: 0,
               maxLife: 15 + Math.random() * 12,
             });
             exhaustParticlesRef.current.push({
-              x: carX + 16 + (Math.random() - 0.5) * 8,
+              x: carX + carHalfW * 0.6 + (Math.random() - 0.5) * 8,
               y: carY + 14,
               vx: (Math.random() - 0.5) * 1.5,
               vy: 2 + Math.random() * 4,
               size: 2.5 + Math.random() * 3.5,
-              alpha: 0.6,
-              color: Math.random() > 0.5 ? '#f59e0b' : '#64748b',
+              alpha: 0.65,
+              color: sparkColor,
               life: 0,
               maxLife: 15 + Math.random() * 12,
             });
@@ -1284,74 +1733,255 @@ function PhaserGame({
         }
 
         // Supercar Shadow on Asphalt
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
         ctx.beginPath();
-        ctx.ellipse(0, 16, 28, 7, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 16, carHalfW + 4, 8, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Supercar Rear Chassis (Metallic Sleek Vector)
-        const carGrad = ctx.createLinearGradient(-26, 0, 26, 0);
-        carGrad.addColorStop(0, '#0f172a');
-        carGrad.addColorStop(0.5, '#334155');
-        carGrad.addColorStop(1, '#0f172a');
-        ctx.fillStyle = carGrad;
-        ctx.strokeStyle = '#f59e0b';
-        ctx.lineWidth = 1.2;
+        // Aerodynamic Side Splitters (Tier 2 and 3)
+        if (betTier >= 2) {
+          ctx.fillStyle = '#0f172a';
+          ctx.strokeStyle = betTier === 3 ? '#eab308' : '#06b6d4';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.roundRect(-carHalfW - 5, -4, 5, 18, [2, 0, 0, 2]);
+          ctx.roundRect(carHalfW, -4, 5, 18, [0, 2, 2, 0]);
+          ctx.fill();
+          ctx.stroke();
+        }
 
+        // Supercar Chassis (Procedural Multi-Tier Metallic Vector)
+        const carGrad = ctx.createLinearGradient(-carHalfW, 0, carHalfW, 0);
+        if (betTier === 3) {
+          // Forged Obsidian Carbon & Imperial Solar Gold
+          carGrad.addColorStop(0, '#09090b');
+          carGrad.addColorStop(0.25, '#78350f');
+          carGrad.addColorStop(0.5, '#18181b');
+          carGrad.addColorStop(0.75, '#78350f');
+          carGrad.addColorStop(1, '#09090b');
+          ctx.strokeStyle = '#facc15';
+          ctx.lineWidth = 1.8;
+          ctx.shadowColor = 'rgba(250, 204, 21, 0.4)';
+          ctx.shadowBlur = 8;
+        } else if (betTier === 2) {
+          // Midnight Blue & Carbon
+          carGrad.addColorStop(0, '#030712');
+          carGrad.addColorStop(0.3, '#1e1b4b');
+          carGrad.addColorStop(0.5, '#0f172a');
+          carGrad.addColorStop(0.7, '#1e1b4b');
+          carGrad.addColorStop(1, '#030712');
+          ctx.strokeStyle = '#06b6d4';
+          ctx.lineWidth = 1.5;
+          ctx.shadowColor = 'rgba(6, 182, 212, 0.35)';
+          ctx.shadowBlur = 6;
+        } else {
+          // Standard Graphite
+          carGrad.addColorStop(0, '#0f172a');
+          carGrad.addColorStop(0.5, '#334155');
+          carGrad.addColorStop(1, '#0f172a');
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 1.2;
+        }
+
+        ctx.fillStyle = carGrad;
         ctx.beginPath();
-        ctx.roundRect(-26, -14, 52, 28, [10, 10, 4, 4]);
+        ctx.roundRect(-carHalfW, -carHalfH, carWidth, carHeight, [12, 12, 4, 4]);
         ctx.fill();
         ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // Dual Racing Stripes (Tier 2 & 3)
+        if (betTier === 3) {
+          // Gold Cybernetic Racing Stripes
+          ctx.fillStyle = 'rgba(250, 204, 21, 0.85)';
+          ctx.fillRect(-6, -carHalfH, 3, carHeight);
+          ctx.fillRect(3, -carHalfH, 3, carHeight);
+        } else if (betTier === 2) {
+          // Electric Cyan Stripes
+          ctx.fillStyle = 'rgba(34, 211, 238, 0.8)';
+          ctx.fillRect(-5, -carHalfH, 2.5, carHeight);
+          ctx.fillRect(2.5, -carHalfH, 2.5, carHeight);
+        }
 
         // Cockpit Canopy (Dark Glass)
-        const roofGrad = ctx.createLinearGradient(0, -22, 0, -10);
+        const canopyW = carWidth * 0.58;
+        const roofGrad = ctx.createLinearGradient(0, -carHalfH - 8, 0, -carHalfH + 4);
         roofGrad.addColorStop(0, '#020617');
-        roofGrad.addColorStop(1, '#1e293b');
+        roofGrad.addColorStop(1, betTier === 3 ? '#292524' : betTier === 2 ? '#082f49' : '#1e293b');
         ctx.fillStyle = roofGrad;
         ctx.beginPath();
-        ctx.roundRect(-16, -22, 32, 14, [6, 6, 2, 2]);
+        ctx.roundRect(-canopyW / 2, -carHalfH - 8, canopyW, 14, [6, 6, 2, 2]);
         ctx.fill();
+
+        // Roof Ram-Air Intake Scoop with Plasma Core (Tier 3 Exclusive)
+        if (betTier === 3) {
+          ctx.fillStyle = '#0f172a';
+          ctx.strokeStyle = '#facc15';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.roundRect(-7, -carHalfH - 14, 14, 7, [3, 3, 1, 1]);
+          ctx.fill();
+          ctx.stroke();
+
+          // Pulsing Plasma Core inside scoop
+          const scoopPulse = 0.5 + Math.sin(now * 0.01) * 0.5;
+          ctx.fillStyle = `rgba(34, 211, 238, ${0.5 + scoopPulse * 0.5})`;
+          ctx.beginPath();
+          ctx.arc(0, -carHalfH - 10, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
 
         // Rear Racing Wing / Spoiler
+        const wingW = carWidth + (betTier === 3 ? 16 : betTier === 2 ? 10 : 8);
         ctx.fillStyle = '#090d16';
-        ctx.strokeStyle = '#f59e0b';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.roundRect(-30, -24, 60, 4, 2);
-        ctx.fill();
-        ctx.stroke();
+        ctx.strokeStyle = betTier === 3 ? '#facc15' : betTier === 2 ? '#06b6d4' : '#f59e0b';
+        ctx.lineWidth = betTier === 3 ? 2 : 1.5;
 
-        // Neon Red LED Lightbar Taillight
+        if (betTier === 3) {
+          // Triple-deck Active-Aero Hyper Wing
+          ctx.beginPath();
+          ctx.roundRect(-wingW / 2, -carHalfH - 12, wingW, 4.5, 2);
+          ctx.fill();
+          ctx.stroke();
+
+          // Endplate strakes
+          ctx.fillStyle = '#facc15';
+          ctx.fillRect(-wingW / 2 - 2, -carHalfH - 15, 3, 10);
+          ctx.fillRect(wingW / 2 - 1, -carHalfH - 15, 3, 10);
+        } else if (betTier === 2) {
+          // Dual-Deck Carbon GT Wing
+          ctx.beginPath();
+          ctx.roundRect(-wingW / 2, -carHalfH - 10, wingW, 4, 2);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = '#06b6d4';
+          ctx.fillRect(-wingW / 2 - 1, -carHalfH - 12, 2.5, 8);
+          ctx.fillRect(wingW / 2 - 1.5, -carHalfH - 12, 2.5, 8);
+        } else {
+          // Single Rear Wing
+          ctx.beginPath();
+          ctx.roundRect(-wingW / 2, -carHalfH - 10, wingW, 4, 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+
+        // Taillight Configuration
         ctx.save();
-        ctx.strokeStyle = '#ef4444';
-        ctx.shadowColor = '#ef4444';
-        ctx.shadowBlur = 10;
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.moveTo(-22, -2);
-        ctx.lineTo(22, -2);
-        ctx.stroke();
+        if (betTier === 3) {
+          // Cyber-Optic Full-Width Solar Gold & Crimson Taillight
+          ctx.strokeStyle = '#ef4444';
+          ctx.shadowColor = '#facc15';
+          ctx.shadowBlur = 14;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(-carHalfW + 6, -2);
+          ctx.lineTo(carHalfW - 6, -2);
+          ctx.stroke();
+
+          // Center Gold LED Segment
+          ctx.strokeStyle = '#facc15';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(-10, -2);
+          ctx.lineTo(10, -2);
+          ctx.stroke();
+        } else if (betTier === 2) {
+          // Dual-Tier Cyan & Crimson Taillight
+          ctx.strokeStyle = '#ef4444';
+          ctx.shadowColor = '#ef4444';
+          ctx.shadowBlur = 10;
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.moveTo(-carHalfW + 6, -2);
+          ctx.lineTo(carHalfW - 6, -2);
+          ctx.stroke();
+
+          ctx.strokeStyle = '#22d3ee';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(-12, 2);
+          ctx.lineTo(12, 2);
+          ctx.stroke();
+        } else {
+          // Standard Single Red Lightbar
+          ctx.strokeStyle = '#ef4444';
+          ctx.shadowColor = '#ef4444';
+          ctx.shadowBlur = 10;
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.moveTo(-22, -2);
+          ctx.lineTo(22, -2);
+          ctx.stroke();
+        }
         ctx.shadowBlur = 0;
         ctx.restore();
 
-        // Dual Chrome Exhaust Pipes
-        ctx.fillStyle = '#94a3b8';
-        ctx.beginPath();
-        ctx.arc(-14, 12, 3, 0, Math.PI * 2);
-        ctx.arc(14, 12, 3, 0, Math.PI * 2);
-        ctx.fill();
+        // Exhaust Pipe Outlets
+        ctx.fillStyle = betTier === 3 ? '#facc15' : betTier === 2 ? '#38bdf8' : '#94a3b8';
+        if (betTier === 3) {
+          for (const offX of [-18, -6, 6, 18]) {
+            ctx.beginPath();
+            ctx.arc(offX, carHalfH - 2, 3.2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else if (betTier === 2) {
+          for (const offX of [-17, -9, 9, 17]) {
+            ctx.beginPath();
+            ctx.arc(offX, carHalfH - 2, 2.8, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else {
+          ctx.beginPath();
+          ctx.arc(-14, carHalfH - 2, 3, 0, Math.PI * 2);
+          ctx.arc(14, carHalfH - 2, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
 
         ctx.restore();
+
+        // Road Barrier Obstacle on Crash Collision
+        if (isCrashed) {
+          drawRoadBarrier(ctx, carX + 8, carY - 26, 92, 32, true, now);
+
+          // Continuous crash engine smoke
+          if (Math.random() > 0.45) {
+            smokePuffsRef.current.push({
+              x: carX + (Math.random() - 0.5) * 22,
+              y: carY - 22,
+              vx: (Math.random() - 0.5) * 1.2,
+              vy: -1.4 - Math.random() * 2,
+              size: 5 + Math.random() * 7,
+              alpha: 0.7,
+              color: Math.random() > 0.5 ? 'rgba(55, 65, 81, 0.75)' : 'rgba(30, 41, 59, 0.75)',
+              life: 0,
+              maxLife: 35 + Math.random() * 25,
+            });
+          }
+        }
+
+        // Victory Gold Underglow on Cashout
+        if (userCashout) {
+          ctx.save();
+          ctx.fillStyle = 'rgba(250, 204, 21, 0.35)';
+          ctx.shadowColor = '#fbbf24';
+          ctx.shadowBlur = 24;
+          ctx.beginPath();
+          ctx.ellipse(carX, carY + 12, 36, 12, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
 
         // Telemetry HUD (Speedometer / Tachometer on left)
         if (phase === 'flying') {
           ctx.save();
           ctx.font = '800 10px ui-monospace, SFMono-Regular, monospace';
-          ctx.fillStyle = '#f59e0b';
+          ctx.fillStyle = betTier === 3 ? '#facc15' : betTier === 2 ? '#22d3ee' : '#f59e0b';
           ctx.textAlign = 'left';
-          ctx.fillText(`SPEED: ${(160 + currentMultiplier * 55).toFixed(0)} KM/H`, 16, h - 28);
+          const tierTag = betTier === 3 ? 'HYPERCAR V16' : betTier === 2 ? 'TURBO GT V12' : 'SPORT COUPE';
+          ctx.fillText(`SPEED: ${(160 + currentMultiplier * 55).toFixed(0)} KM/H • ${tierTag}`, 16, h - 28);
           ctx.fillStyle = 'rgba(156, 163, 175, 0.7)';
-          ctx.fillText(`RPM: ${(4500 + Math.min(currentMultiplier * 750, 4500)).toFixed(0)} • NITRO ON`, 16, h - 14);
+          ctx.fillText(`RPM: ${(4500 + Math.min(currentMultiplier * 750, 4500)).toFixed(0)} • NITRO TIER ${betTier}`, 16, h - 14);
           ctx.restore();
         }
       } else if (currentActiveTheme === 'chart') {
@@ -1367,6 +1997,32 @@ function PhaserGame({
         const chartHeight = chartBaseY - chartTopY;
 
         ctx.save();
+
+        // Dynamic Fibonacci Retracement Levels (Tier 3 VIP Whale)
+        if (betTier === 3) {
+          const fibLevels = [
+            { ratio: 0.236, label: 'Fib 23.6%' },
+            { ratio: 0.382, label: 'Fib 38.2%' },
+            { ratio: 0.618, label: 'Fib 61.8% (Golden)' },
+          ];
+          ctx.save();
+          ctx.lineWidth = 1;
+          ctx.setLineDash([2, 4]);
+          ctx.font = '700 8px ui-monospace, monospace';
+          for (const fib of fibLevels) {
+            const fibY = chartBaseY - chartHeight * fib.ratio;
+            ctx.strokeStyle = 'rgba(250, 204, 21, 0.3)';
+            ctx.beginPath();
+            ctx.moveTo(startX, fibY);
+            ctx.lineTo(w - 75, fibY);
+            ctx.stroke();
+            ctx.fillStyle = 'rgba(250, 204, 21, 0.6)';
+            ctx.textAlign = 'left';
+            ctx.fillText(fib.label, startX + 4, fibY - 3);
+          }
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
 
         // Draw Sequence of Bullish Japanese Candlesticks
         const points: Array<{ x: number; y: number }> = [];
@@ -1404,12 +2060,33 @@ function PhaserGame({
           points.push({ x: cx, y: closeY });
         }
 
-        // Draw EMA (Exponential Moving Average) Trend Curve
+        // Volume Surge Bars at Chart Base (Tier 2 & 3)
+        if (betTier >= 2) {
+          for (let i = 0; i < candleCount; i++) {
+            const cx = startX + i * candleSpacing + candleSpacing / 2;
+            const volH = 5 + ((i * 11) % 15) + (i === candleCount - 1 ? 12 : 0);
+            const isGreen = points[i] && i > 0 && points[i].y <= points[i - 1].y;
+            ctx.fillStyle = isGreen ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)';
+            ctx.fillRect(cx - candleWidth * 0.35, chartBaseY + 4, candleWidth * 0.7, volH);
+          }
+        }
+
+        // Draw Moving Average Ribbon / Trend Curve
         if (points.length > 1) {
-          ctx.strokeStyle = '#22d3ee';
-          ctx.lineWidth = 2;
-          ctx.shadowColor = '#22d3ee';
-          ctx.shadowBlur = 6;
+          if (betTier === 3) {
+            // Radiant Golden VIP Exponential Trendline
+            ctx.strokeStyle = '#facc15';
+            ctx.lineWidth = 2.5;
+            ctx.shadowColor = '#f59e0b';
+            ctx.shadowBlur = 10;
+          } else {
+            // Fast EMA 9 in Cyan
+            ctx.strokeStyle = '#22d3ee';
+            ctx.lineWidth = 2;
+            ctx.shadowColor = '#22d3ee';
+            ctx.shadowBlur = 6;
+          }
+
           ctx.beginPath();
           ctx.moveTo(points[0].x, points[0].y);
           for (let p = 1; p < points.length; p++) {
@@ -1417,6 +2094,18 @@ function PhaserGame({
           }
           ctx.stroke();
           ctx.shadowBlur = 0;
+
+          // Slow EMA 21 Ribbon Line (Tier 2 Pro)
+          if (betTier === 2) {
+            ctx.strokeStyle = 'rgba(16, 185, 129, 0.7)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y + 6);
+            for (let p = 1; p < points.length; p++) {
+              ctx.lineTo(points[p].x, points[p].y + 6);
+            }
+            ctx.stroke();
+          }
         }
 
         // Live Horizontal Price Marker Dotted Line
@@ -1443,6 +2132,46 @@ function PhaserGame({
           ctx.fillText(`${currentMultiplier.toFixed(2)}x`, w - 38, lastPt.y);
         }
 
+        // Support Breakdown Cracks upon Crash
+        if (phase === 'crashed') {
+          ctx.save();
+          ctx.strokeStyle = '#ef4444';
+          ctx.lineWidth = 2.5;
+          ctx.shadowColor = '#ef4444';
+          ctx.shadowBlur = 12;
+          ctx.beginPath();
+          ctx.moveTo(w - 120, chartBaseY);
+          ctx.lineTo(w - 85, chartBaseY + 8);
+          ctx.lineTo(w - 60, chartBaseY - 4);
+          ctx.lineTo(w - 20, chartBaseY + 12);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // Golden Take-Profit Target Line on Cashout
+        if (userCashout && lastPt) {
+          ctx.save();
+          ctx.strokeStyle = '#fbbf24';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.moveTo(25, lastPt.y);
+          ctx.lineTo(w - 25, lastPt.y);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          ctx.fillStyle = '#fbbf24';
+          ctx.beginPath();
+          ctx.roundRect(w - 85, lastPt.y - 10, 68, 20, 4);
+          ctx.fill();
+          ctx.fillStyle = '#451a03';
+          ctx.font = '800 10px Vazirmatn, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('تارگت سود', w - 51, lastPt.y);
+          ctx.restore();
+        }
+
         ctx.restore();
       } else {
         // --- COSMIC ROCKET LAUNCH & FLIGHT ---
@@ -1453,6 +2182,7 @@ function PhaserGame({
 
         let currentRocketY = groundY;
         let rocketRotation = 0;
+        const skin = SKIN_CONFIGS[selectedSkinRef.current] || SKIN_CONFIGS.default;
 
         if (phase === 'betting') {
           currentRocketY = groundY;
@@ -1472,7 +2202,26 @@ function PhaserGame({
           ctx.beginPath();
           ctx.roundRect(padX - padWidth / 2, padY - 6, padWidth, 12, [4, 4, 0, 0]);
           ctx.fill();
+
+          // Launch Gantry Clamps
+          ctx.fillStyle = '#374151';
+          ctx.fillRect(padX - 32, padY - 26, 6, 20);
+          ctx.fillRect(padX + 26, padY - 26, 6, 20);
           ctx.restore();
+
+          // Render Rocket standing on launchpad (Directly transforming with Bet Tier!)
+          drawRocketCraft(
+            ctx,
+            w / 2,
+            groundY - 6,
+            0,
+            betTier,
+            skin,
+            false,
+            currentMultiplier,
+            now,
+            rocketImgRef.current
+          );
         } else if (phase === 'flying') {
           const elapsed = Math.max(0, now - startTime);
           const takeoffProgress = Math.min(elapsed / 1400, 1);
@@ -1483,22 +2232,19 @@ function PhaserGame({
           rocketRotation = Math.sin(now * 0.003) * 0.035;
           rocketYRef.current = currentRocketY;
 
-          // Active Skin Configuration
-          const skin = SKIN_CONFIGS[selectedSkinRef.current] || SKIN_CONFIGS.default;
-
-          // Exhaust flame
-          ctx.save();
-          ctx.translate(w / 2, currentRocketY);
-          const flameLength = (selectedSkinRef.current === 'phoenix' ? 44 : 35) + Math.sin(now * 0.06) * 6;
-          const flameGrad = ctx.createLinearGradient(0, 18, 0, 18 + flameLength);
-          flameGrad.addColorStop(0, skin.flameColors[0]);
-          flameGrad.addColorStop(0.35, skin.flameColors[1]);
-          flameGrad.addColorStop(1, skin.flameColors[2]);
-          ctx.fillStyle = flameGrad;
-          ctx.beginPath();
-          ctx.ellipse(0, 18 + flameLength * 0.45, 9, flameLength * 0.5, 0, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.restore();
+          // Render Rocket soaring in space with Multi-Tier Thrusters and Afterburners!
+          drawRocketCraft(
+            ctx,
+            w / 2,
+            currentRocketY,
+            rocketRotation,
+            betTier,
+            skin,
+            true,
+            currentMultiplier,
+            now,
+            rocketImgRef.current
+          );
 
           // Spawn rocket exhaust particles during flight
           if (Math.random() > 0.3) {
@@ -1518,50 +2264,55 @@ function PhaserGame({
           }
         } else if (phase === 'crashed') {
           currentRocketY = crashAnimationRef.current.crashY || flightCenterY;
+          if (now - crashAnimationRef.current.startTime < 160) {
+            drawRocketCraft(
+              ctx,
+              w / 2,
+              currentRocketY,
+              0.35,
+              betTier,
+              skin,
+              false,
+              currentMultiplier,
+              now,
+              rocketImgRef.current
+            );
+          }
         }
 
-        // Draw Rocket Hull Sprite or Procedural Vector
-        if (phase !== 'crashed' || (now - crashAnimationRef.current.startTime < 100)) {
-          const skin = SKIN_CONFIGS[selectedSkinRef.current] || SKIN_CONFIGS.default;
-          ctx.save();
-          ctx.translate(w / 2, currentRocketY);
-          ctx.rotate(rocketRotation);
+        // Draw Space Asteroid Obstacle on Crash
+        if (phase === 'crashed') {
+          drawSpaceAsteroid(ctx, w / 2, currentRocketY - 26, 24, true, now);
 
-          // Skin aura glow
-          ctx.shadowColor = skin.auraColor;
-          ctx.shadowBlur = skin.auraBlur;
-
-          if (rocketImgRef.current && rocketImgRef.current.complete) {
-            ctx.drawImage(rocketImgRef.current, -22, -30, 44, 60);
-
-            // Premium skin aura ring
-            if (selectedSkinRef.current !== 'default') {
-              ctx.strokeStyle = skin.accentColor;
-              ctx.lineWidth = 1.5;
-              ctx.beginPath();
-              ctx.ellipse(0, 0, 18, 26, 0, 0, Math.PI * 2);
-              ctx.stroke();
-            }
-          } else {
-            // Fallback Vector Rocket
-            ctx.fillStyle = skin.hullColor;
-            ctx.strokeStyle = skin.accentColor;
-            ctx.lineWidth = 1;
+          // Expanding Plasma Shockwave
+          const crashElapsed = now - crashAnimationRef.current.startTime;
+          if (crashElapsed < 600) {
+            const shockRadius = (crashElapsed / 600) * (w * 0.35);
+            const shockAlpha = 1 - crashElapsed / 600;
+            ctx.save();
+            ctx.strokeStyle = `rgba(249, 115, 22, ${shockAlpha})`;
+            ctx.lineWidth = 3.5 * shockAlpha;
+            ctx.shadowColor = '#ef4444';
+            ctx.shadowBlur = 16;
             ctx.beginPath();
-            ctx.moveTo(0, -28);
-            ctx.lineTo(10, -8);
-            ctx.lineTo(10, 18);
-            ctx.lineTo(-10, 18);
-            ctx.lineTo(-10, -8);
-            ctx.closePath();
-            ctx.fill();
+            ctx.arc(w / 2, currentRocketY - 14, shockRadius, 0, Math.PI * 2);
             ctx.stroke();
-
-            ctx.fillStyle = skin.accentColor;
-            ctx.beginPath();
-            ctx.moveTo(0, -28); ctx.lineTo(10, -8); ctx.lineTo(-10, -8); ctx.closePath();
-            ctx.fill();
+            ctx.restore();
           }
+        }
+
+        // Golden Warp Energy Shield on Cashout
+        if (userCashout) {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(250, 204, 21, 0.75)';
+          ctx.lineWidth = 2;
+          ctx.shadowColor = '#fbbf24';
+          ctx.shadowBlur = 18;
+          ctx.beginPath();
+          ctx.ellipse(w / 2, currentRocketY, 32, 42, 0, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.fillStyle = 'rgba(250, 204, 21, 0.12)';
+          ctx.fill();
           ctx.restore();
         }
       }
@@ -1611,6 +2362,307 @@ function PhaserGame({
           ctx.fill();
         }
         ctx.restore();
+      }
+
+      // Update & Draw Collision Debris Chunks (Barrier & Asteroid pieces)
+      if (debrisParticlesRef.current.length > 0) {
+        ctx.save();
+        for (let i = debrisParticlesRef.current.length - 1; i >= 0; i--) {
+          const deb = debrisParticlesRef.current[i];
+          deb.x += deb.vx;
+          deb.y += deb.vy;
+          deb.vy += 0.12; // gravity
+          deb.rot += deb.vRot;
+          deb.life++;
+          const debAlpha = deb.alpha * (1 - deb.life / deb.maxLife);
+
+          if (deb.life >= deb.maxLife || debAlpha <= 0) {
+            debrisParticlesRef.current.splice(i, 1);
+            continue;
+          }
+
+          ctx.save();
+          ctx.translate(deb.x, deb.y);
+          ctx.rotate(deb.rot);
+          ctx.fillStyle = deb.color;
+          ctx.globalAlpha = Math.max(0, debAlpha);
+          if (deb.shape === 'shingle') {
+            ctx.fillRect(-deb.size, -deb.size * 0.4, deb.size * 2, deb.size * 0.8);
+          } else {
+            ctx.fillRect(-deb.size / 2, -deb.size / 2, deb.size, deb.size);
+          }
+          ctx.restore();
+        }
+        ctx.restore();
+      }
+
+      // Update & Draw Rising Smoke Puffs
+      if (smokePuffsRef.current.length > 0) {
+        ctx.save();
+        for (let i = smokePuffsRef.current.length - 1; i >= 0; i--) {
+          const puff = smokePuffsRef.current[i];
+          puff.x += puff.vx;
+          puff.y += puff.vy;
+          puff.size += 0.22;
+          puff.life++;
+          const puffAlpha = puff.alpha * (1 - puff.life / puff.maxLife);
+
+          if (puff.life >= puff.maxLife || puffAlpha <= 0) {
+            smokePuffsRef.current.splice(i, 1);
+            continue;
+          }
+
+          ctx.fillStyle = puff.color;
+          ctx.globalAlpha = Math.max(0, puffAlpha);
+          ctx.beginPath();
+          ctx.arc(puff.x, puff.y, puff.size, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      // Update & Draw Victory Confetti Ribbons
+      if (confettiParticlesRef.current.length > 0) {
+        ctx.save();
+        for (let i = confettiParticlesRef.current.length - 1; i >= 0; i--) {
+          const c = confettiParticlesRef.current[i];
+          c.x += c.vx;
+          c.y += c.vy;
+          c.vy += 0.06;
+          c.rot += c.vRot;
+          c.life++;
+          const cAlpha = c.alpha * (1 - c.life / c.maxLife);
+
+          if (c.life >= c.maxLife || cAlpha <= 0) {
+            confettiParticlesRef.current.splice(i, 1);
+            continue;
+          }
+
+          ctx.save();
+          ctx.translate(c.x, c.y);
+          ctx.rotate(c.rot);
+          ctx.fillStyle = c.color;
+          ctx.globalAlpha = Math.max(0, cAlpha);
+          ctx.fillRect(-c.sizeW / 2, -c.sizeH / 2, c.sizeW, c.sizeH);
+          ctx.restore();
+        }
+        ctx.restore();
+      }
+
+      // =========================================================================
+      // CANVAS VEHICLE TIER HUD BADGE (TOP-LEFT)
+      // =========================================================================
+      ctx.save();
+      const badgeX = 14;
+      const badgeY = 14;
+      const badgeH = 24;
+
+      let badgeLabel = '';
+      let badgeBorder = '';
+      let badgeGlow = '';
+      let badgeBg = '';
+      let badgeTextColor = '';
+
+      if (currentActiveTheme === 'racing') {
+        if (betTier === 3) {
+          badgeLabel = `👑 هایپرکار ${betAmount} سکه`;
+          badgeBorder = 'rgba(250, 204, 21, 0.85)';
+          badgeGlow = '#f59e0b';
+          badgeBg = 'rgba(69, 26, 3, 0.85)';
+          badgeTextColor = '#fde047';
+        } else if (betTier === 2) {
+          badgeLabel = `⚡ توربو V12 ${betAmount} سکه`;
+          badgeBorder = 'rgba(6, 182, 212, 0.85)';
+          badgeGlow = '#06b6d4';
+          badgeBg = 'rgba(8, 47, 73, 0.85)';
+          badgeTextColor = '#67e8f9';
+        } else {
+          badgeLabel = `🏎️ کوپه ${betAmount} سکه`;
+          badgeBorder = 'rgba(245, 158, 11, 0.55)';
+          badgeGlow = '#f59e0b';
+          badgeBg = 'rgba(30, 41, 59, 0.8)';
+          badgeTextColor = '#fcd34d';
+        }
+      } else if (currentActiveTheme === 'chart') {
+        if (betTier === 3) {
+          badgeLabel = `👑 وال VIP ${betAmount} سکه`;
+          badgeBorder = 'rgba(250, 204, 21, 0.85)';
+          badgeGlow = '#f59e0b';
+          badgeBg = 'rgba(69, 26, 3, 0.85)';
+          badgeTextColor = '#fde047';
+        } else if (betTier === 2) {
+          badgeLabel = `⚡ پرو تریدر ${betAmount} سکه`;
+          badgeBorder = 'rgba(16, 185, 129, 0.85)';
+          badgeGlow = '#10b981';
+          badgeBg = 'rgba(6, 78, 59, 0.85)';
+          badgeTextColor = '#6ee7b7';
+        } else {
+          badgeLabel = `📊 استاندارد ${betAmount} سکه`;
+          badgeBorder = 'rgba(16, 185, 129, 0.55)';
+          badgeGlow = '#10b981';
+          badgeBg = 'rgba(30, 41, 59, 0.8)';
+          badgeTextColor = '#a7f3d0';
+        }
+      } else {
+        if (betTier === 3) {
+          badgeLabel = `👑 دردنات کیهانی ${betAmount} سکه`;
+          badgeBorder = 'rgba(250, 204, 21, 0.85)';
+          badgeGlow = '#f59e0b';
+          badgeBg = 'rgba(69, 26, 3, 0.85)';
+          badgeTextColor = '#fde047';
+        } else if (betTier === 2) {
+          badgeLabel = `⚡ فانتوم ${betAmount} سکه`;
+          badgeBorder = 'rgba(6, 182, 212, 0.85)';
+          badgeGlow = '#06b6d4';
+          badgeBg = 'rgba(8, 47, 73, 0.85)';
+          badgeTextColor = '#67e8f9';
+        } else {
+          badgeLabel = `🚀 فالکون ${betAmount} سکه`;
+          badgeBorder = 'rgba(234, 179, 8, 0.55)';
+          badgeGlow = '#eab308';
+          badgeBg = 'rgba(30, 41, 59, 0.8)';
+          badgeTextColor = '#fef08a';
+        }
+      }
+
+      ctx.direction = 'rtl';
+      ctx.font = '700 11px Vazirmatn, sans-serif';
+      const textW = ctx.measureText(badgeLabel).width;
+      const badgeW = textW + 16;
+
+      ctx.fillStyle = badgeBg;
+      ctx.strokeStyle = badgeBorder;
+      ctx.lineWidth = 1.2;
+      if (betTier >= 2) {
+        ctx.shadowColor = badgeGlow;
+        ctx.shadowBlur = 10;
+      }
+      ctx.beginPath();
+      ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 12);
+      ctx.fill();
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = badgeTextColor;
+      ctx.fillText(badgeLabel, badgeX + badgeW / 2, badgeY + badgeH / 2 + 1);
+      ctx.restore();
+
+      // =========================================================================
+      // COCKPIT REACTIVE HUD DISPLAY SCREEN (REACTIONS TO CRASH & WIN)
+      // =========================================================================
+      drawThemeDisplayScreen(
+        ctx,
+        w / 2,
+        34,
+        w,
+        currentActiveTheme,
+        phase,
+        userBet,
+        userCashout,
+        currentMultiplier,
+        crashPoint || 1.0,
+        betTier,
+        betAmount,
+        now
+      );
+
+      // =========================================================================
+      // UPGRADE SHOCKWAVE PULSE EFFECTS (AROUND VEHICLE)
+      // =========================================================================
+      if (shockwavesRef.current.length > 0) {
+        const activeShockwaves: Shockwave[] = [];
+
+        for (let i = 0; i < shockwavesRef.current.length; i++) {
+          const sw = shockwavesRef.current[i];
+          const elapsed = now - sw.startTime;
+          if (elapsed < sw.duration) {
+            activeShockwaves.push(sw);
+            const progress = elapsed / sw.duration;
+            const ease = 1 - Math.pow(1 - progress, 3);
+            const currentRadius = 16 + (sw.maxRadius - 16) * ease;
+            const alpha = Math.max(0, (1 - progress) * (sw.tier === 3 ? 0.95 : 0.85));
+
+            ctx.save();
+
+            // 1. Primary Glowing Electric Ring
+            ctx.beginPath();
+            ctx.arc(sw.x, sw.y, currentRadius, 0, Math.PI * 2);
+            ctx.strokeStyle = sw.tier === 3 ? `rgba(251, 191, 36, ${alpha})` : `rgba(34, 211, 238, ${alpha})`;
+            ctx.lineWidth = (sw.tier === 3 ? 3.5 : 2.5) * (1 - progress * 0.7);
+            ctx.shadowColor = sw.tier === 3 ? '#f59e0b' : '#06b6d4';
+            ctx.shadowBlur = sw.tier === 3 ? 24 : 16;
+            ctx.stroke();
+
+            // 2. High-Frequency Pulsing Inner Electric Wave
+            const innerRadius = Math.max(8, currentRadius * 0.72);
+            ctx.beginPath();
+            ctx.arc(sw.x, sw.y, innerRadius, 0, Math.PI * 2);
+            ctx.strokeStyle = sw.tier === 3 ? `rgba(254, 240, 138, ${alpha * 0.85})` : `rgba(165, 243, 252, ${alpha * 0.85})`;
+            ctx.lineWidth = 1.6;
+            ctx.setLineDash([8, 6]);
+            ctx.lineDashOffset = -now * 0.04;
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // 3. High-Voltage Electric Discharge Lightning Arcs
+            sw.sparks.forEach((sp) => {
+              const sparkBaseDist = currentRadius * 0.85 + sp.dist * progress * 0.6;
+              const sx = sw.x + Math.cos(sp.angle) * sparkBaseDist;
+              const sy = sw.y + Math.sin(sp.angle) * sparkBaseDist;
+              const ex = sx + Math.cos(sp.angle) * (sp.length * (1 - progress * 0.4));
+              const ey = sy + Math.sin(sp.angle) * (sp.length * (1 - progress * 0.4));
+
+              ctx.beginPath();
+              ctx.moveTo(sx, sy);
+              const midX = (sx + ex) / 2 + Math.sin(now * 0.08 + sp.angle) * 5;
+              const midY = (sy + ey) / 2 + Math.cos(now * 0.08 + sp.angle) * 5;
+              ctx.lineTo(midX, midY);
+              ctx.lineTo(ex, ey);
+              ctx.strokeStyle = sw.tier === 3 ? `rgba(255, 255, 255, ${alpha * 0.95})` : `rgba(224, 242, 254, ${alpha * 0.95})`;
+              ctx.lineWidth = 1.8;
+              ctx.stroke();
+            });
+
+            // 4. Floating Upgrade Toast Badge above Vehicle
+            const toastY = sw.y - (currentActiveTheme === 'racing' ? 52 : 58) - progress * 26;
+            const toastText =
+              sw.tier === 3
+                ? currentActiveTheme === 'racing'
+                  ? '👑 هایپرکار ۱۰۰ • شتاب مکس'
+                  : currentActiveTheme === 'chart'
+                  ? '👑 وال VIP ۱۰۰ • نوسان طلایی'
+                  : '👑 ناوبر کیهانی ۱۰۰ • لول مکس'
+                : currentActiveTheme === 'racing'
+                ? '⚡ توربو V12 ۵۰ • بوست نیترو'
+                : currentActiveTheme === 'chart'
+                ? '⚡ تریدر ۵۰ • تحلیل پیشرفته'
+                : '⚡ فانتوم ۵۰ • پیشران دوگانه';
+
+            ctx.direction = 'rtl';
+            ctx.font = 'bold 11px Vazirmatn, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const textWidth = ctx.measureText(toastText).width;
+            const boxW = textWidth + 22;
+            const boxH = 22;
+
+            ctx.fillStyle = sw.tier === 3 ? `rgba(24, 20, 10, ${alpha * 0.88})` : `rgba(8, 20, 32, ${alpha * 0.88})`;
+            ctx.strokeStyle = sw.tier === 3 ? `rgba(245, 158, 11, ${alpha * 0.95})` : `rgba(6, 182, 212, ${alpha * 0.95})`;
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.roundRect(sw.x - boxW / 2, toastY - boxH / 2, boxW, boxH, 8);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = sw.tier === 3 ? `rgba(253, 224, 71, ${alpha})` : `rgba(103, 232, 249, ${alpha})`;
+            ctx.fillText(toastText, sw.x, toastY);
+
+            ctx.restore();
+          }
+        }
+        shockwavesRef.current = activeShockwaves;
       }
 
       // =========================================================================
@@ -1760,23 +2812,21 @@ function PhaserGame({
       let statusBg = 'rgba(31, 41, 55, 0.75)';
       let statusBorder = 'rgba(75, 85, 99, 0.5)';
 
-      if (phase === 'flying') {
-        if (userBet && userCashout) {
-          statusMsg = `خروج موفق! برد ${(userBet * userCashout).toFixed(1)} سکه با ضریب ${userCashout.toFixed(2)}x`;
-          statusColor = '#facc15';
-          statusBg = 'rgba(113, 63, 18, 0.85)';
-          statusBorder = 'rgba(250, 204, 21, 0.6)';
-        } else if (userBet) {
-          statusMsg =
-            currentActiveTheme === 'racing'
-              ? 'سوپراسپرت در حال شتاب • آماده خروج باشید!'
-              : currentActiveTheme === 'chart'
-              ? 'بازار در حال صعود • آماده سیو سود باشید!'
-              : 'موشک در مدار • آماده خروج باشید!';
-          statusColor = '#67e8f9';
-          statusBg = 'rgba(12, 74, 96, 0.8)';
-          statusBorder = 'rgba(56, 189, 248, 0.5)';
-        }
+      if (userBet && userCashout) {
+        statusMsg = `خروج موفق! برد ${(userBet * userCashout).toFixed(1)} سکه با ضریب ${userCashout.toFixed(2)}x`;
+        statusColor = '#facc15';
+        statusBg = 'rgba(113, 63, 18, 0.85)';
+        statusBorder = 'rgba(250, 204, 21, 0.6)';
+      } else if (phase === 'flying' && userBet) {
+        statusMsg =
+          currentActiveTheme === 'racing'
+            ? 'سوپراسپرت در حال شتاب • آماده خروج باشید!'
+            : currentActiveTheme === 'chart'
+            ? 'بازار در حال صعود • آماده سیو سود باشید!'
+            : 'موشک در مدار • آماده خروج باشید!';
+        statusColor = '#67e8f9';
+        statusBg = 'rgba(12, 74, 96, 0.8)';
+        statusBorder = 'rgba(56, 189, 248, 0.5)';
       } else if (phase === 'crashed' && userBet && !userCashout) {
         statusMsg =
           currentActiveTheme === 'racing'

@@ -1,8 +1,8 @@
 'use client';
 
-import { shareScoreToTelegram } from '@/lib/telegramHaptics';
-import { Coins, History, Share2 } from 'lucide-react';
-import { memo, useEffect, useState } from 'react';
+import { shareScoreToTelegram, triggerHaptic } from '@/lib/telegramHaptics';
+import { CandlestickChart, Car, Coins, History, Rocket, Share2 } from 'lucide-react';
+import { memo, useEffect, useRef, useState } from 'react';
 
 interface Game {
   id: number;
@@ -11,8 +11,39 @@ interface Game {
   profit: number;
   status: string;
   crashPoint: number | null;
+  theme?: string;
   createdAt: string;
 }
+
+const getGameMeta = (theme?: string) => {
+  switch (theme) {
+    case 'racing':
+      return {
+        name: 'ماشین مسابقه',
+        crashLabel: 'تصادف در',
+        icon: Car,
+        avatarClass: 'bg-amber-500/15 border-amber-500/30 text-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.2)]',
+        iconClass: 'text-amber-300',
+      };
+    case 'chart':
+      return {
+        name: 'نمودار سهام',
+        crashLabel: 'ریزش در',
+        icon: CandlestickChart,
+        avatarClass: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.2)]',
+        iconClass: 'text-emerald-300',
+      };
+    case 'rocket':
+    default:
+      return {
+        name: 'موشک کیهانی',
+        crashLabel: 'انفجار در',
+        icon: Rocket,
+        avatarClass: 'bg-yellow-500/15 border-yellow-500/30 text-yellow-300 shadow-[0_0_10px_rgba(250,204,21,0.2)]',
+        iconClass: 'text-yellow-300',
+      };
+  }
+};
 
 interface GameHistoryProps {
   userId?: string;
@@ -22,6 +53,21 @@ interface GameHistoryProps {
 function GameHistory({ userId, refreshTrigger }: GameHistoryProps) {
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(false);
+  const [flashingGameId, setFlashingGameId] = useState<number | null>(null);
+  const initialLoadedRef = useRef<boolean>(false);
+  const prevGamesRef = useRef<Game[]>([]);
+
+  useEffect(() => {
+    prevGamesRef.current = games;
+  }, [games]);
+
+  useEffect(() => {
+    if (!flashingGameId) return;
+    const timer = setTimeout(() => {
+      setFlashingGameId(null);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [flashingGameId]);
 
   useEffect(() => {
     if (!userId) return;
@@ -33,7 +79,22 @@ function GameHistory({ userId, refreshTrigger }: GameHistoryProps) {
         const response = await fetch(`/api/profile/games?telegram_id=${userId}`);
         if (response.ok) {
           const data = await response.json();
-          setGames(data.games || []);
+          const incoming: Game[] = data.games || [];
+
+          if (incoming.length > 0) {
+            if (initialLoadedRef.current) {
+              const newest = incoming[0];
+              const alreadyExists = prevGamesRef.current.some((g) => g.id === newest.id);
+              if (!alreadyExists) {
+                setFlashingGameId(newest.id);
+                triggerHaptic(newest.profit > 0 ? 'success' : 'medium');
+              }
+            } else {
+              initialLoadedRef.current = true;
+            }
+          }
+
+          setGames(incoming);
         }
       } catch (error) {
         console.error('Error fetching games:', error);
@@ -96,75 +157,103 @@ function GameHistory({ userId, refreshTrigger }: GameHistoryProps) {
       <div className="space-y-2">
         {games.map((game) => {
           const isWin = game.profit > 0;
+          const isNew = game.id === flashingGameId;
+          const gameMeta = getGameMeta(game.theme);
+          const GameIcon = gameMeta.icon;
+
           return (
             <div
               key={game.id}
-              className={`p-2.5 sm:p-3 rounded-xl border transition-all ${
-                isWin
-                  ? 'bg-[#181a20]/90 border-green-500/40 hover:border-green-500/60 shadow-[0_0_12px_rgba(34,197,94,0.12)]'
-                  : 'bg-[#181a20]/90 border-red-500/30 hover:border-red-500/50'
+              className={`group relative overflow-hidden rounded-xl p-2.5 sm:p-3 transition-all duration-300 border ${
+                isNew
+                  ? isWin
+                    ? 'animate-in fade-in-0 slide-in-from-top-3 duration-500 ring-2 ring-green-400 shadow-[0_0_24px_rgba(74,222,128,0.5)] border-green-400/90 bg-gradient-to-r from-[#181a20] via-[#1a2e23] to-[#14261d]'
+                    : 'animate-in fade-in-0 slide-in-from-top-3 duration-500 ring-2 ring-red-400 shadow-[0_0_24px_rgba(248,113,113,0.45)] border-red-500/90 bg-gradient-to-r from-[#181a20] via-[#2d191d] to-[#251518]'
+                  : isWin
+                  ? 'bg-gradient-to-r from-[#181a20] via-[#1a232e] to-[#14261d]/80 border-green-500/30 hover:border-green-500/50 shadow-[0_4px_16px_rgba(34,197,94,0.08)]'
+                  : 'bg-gradient-to-r from-[#181a20] via-[#1b1c24] to-[#251518]/70 border-[#374151]/60 hover:border-red-500/30 shadow-[0_4px_14px_rgba(0,0,0,0.4)]'
               }`}
             >
-              <div className="flex justify-between items-center mb-1.5">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`w-2 h-2 rounded-full ${
-                      isWin ? 'bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.7)]' : 'bg-red-400'
-                    }`}
-                  />
-                  <span className="text-white text-xs sm:text-sm font-medium flex items-center gap-1">
-                    <span>شرط:</span>
-                    <span className="font-mono text-yellow-400 font-extrabold dir-ltr">
-                      {game.bet.toFixed(0)}
-                    </span>
-                    <Coins className="w-3 h-3 text-yellow-400" />
-                  </span>
-                </div>
-                <div
-                  className={`text-xs sm:text-sm font-mono font-bold px-2 py-0.5 rounded-lg border dir-ltr flex items-center gap-1 ${
-                    isWin
-                      ? 'text-green-300 bg-green-950/60 border-green-500/40'
-                      : 'text-red-300 bg-red-950/60 border-red-500/40'
-                  }`}
-                >
-                  <span>{game.profit >= 0 ? '+' : ''}{game.profit.toFixed(0)}</span>
-                  <Coins className={`w-3 h-3 ${isWin ? 'text-green-300' : 'text-red-300'}`} />
-                </div>
-              </div>
+              {/* خط نشانگر عمودی وضعیت نتیجه */}
+              <div
+                className={`absolute top-0 right-0 bottom-0 w-1 ${
+                  isNew
+                    ? isWin
+                      ? 'bg-green-400 shadow-[0_0_12px_rgba(74,222,128,0.9)] animate-pulse'
+                      : 'bg-red-400 shadow-[0_0_12px_rgba(248,113,113,0.9)] animate-pulse'
+                    : isWin
+                    ? 'bg-gradient-to-b from-green-400 to-emerald-500 shadow-[0_0_8px_rgba(74,222,128,0.6)]'
+                    : 'bg-gradient-to-b from-red-500/80 to-red-700/60'
+                }`}
+              />
 
-              <div className="flex justify-between items-center text-[11px] sm:text-xs text-gray-300 pt-1.5 border-t border-[#374151]/60">
-                <div className="flex items-center gap-2 font-mono">
-                  <span>
-                    انفجار:{' '}
-                    <strong className="text-white dir-ltr">
-                      {game.crashPoint ? game.crashPoint.toFixed(2) + 'x' : '—'}
-                    </strong>
-                  </span>
-                  <span className="text-[#374151]">|</span>
-                  <span>
-                    برداشت:{' '}
-                    {game.cashout ? (
-                      <strong className="text-green-400 dir-ltr font-bold">{game.cashout.toFixed(2)}x</strong>
-                    ) : (
-                      <strong className="text-gray-500">—</strong>
-                    )}
-                  </span>
+              <div className="flex items-center justify-between gap-2.5 pr-2">
+                {/* بخش راست: آیکون تم گرافیکی + عنوان و اطلاعات راند */}
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${gameMeta.avatarClass}`}
+                  >
+                    <GameIcon className={`w-4 h-4 ${gameMeta.iconClass}`} />
+                  </div>
+
+                  <div className="flex flex-col min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-white truncate">{gameMeta.name}</span>
+                      {isNew ? (
+                        <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-yellow-400/20 text-yellow-300 border border-yellow-400/50 animate-pulse flex items-center gap-1 shadow-[0_0_8px_rgba(250,204,21,0.3)]">
+                          <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-ping" />
+                          <span>راند تازه</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-gray-400 font-mono">
+                          {new Date(game.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 text-[11px] font-mono mt-0.5">
+                      <span className="text-gray-400 flex items-center gap-1">
+                        <span>شرط</span>
+                        <strong className="text-yellow-400 font-bold dir-ltr">{game.bet.toFixed(0)}</strong>
+                      </span>
+                      <span className="text-[#374151]">·</span>
+                      {game.cashout ? (
+                        <span className="text-green-400 font-bold dir-ltr">
+                          {game.cashout.toFixed(2)}x <span className="text-[10px] font-normal text-green-300">برداشت</span>
+                        </span>
+                      ) : (
+                        <span className="text-red-400/90 dir-ltr">
+                          {game.crashPoint ? `${game.crashPoint.toFixed(2)}x` : '—'}{' '}
+                          <span className="text-[10px] font-normal text-red-400/70">{gameMeta.crashLabel}</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
+
+                {/* بخش چپ: سود خالص و دکمه اشتراک */}
+                <div className="flex items-center gap-2 shrink-0 dir-ltr">
+                  <div
+                    className={`px-2.5 py-1 rounded-lg font-mono font-bold text-xs sm:text-sm flex items-center gap-1 border ${
+                      isWin
+                        ? 'bg-green-500/10 text-green-300 border-green-500/30 shadow-[0_0_12px_rgba(34,197,94,0.15)]'
+                        : 'bg-red-500/10 text-red-300/90 border-red-500/20'
+                    }`}
+                  >
+                    <span>{game.profit >= 0 ? '+' : ''}{game.profit.toFixed(0)}</span>
+                    <Coins className={`w-3.5 h-3.5 ${isWin ? 'text-green-300' : 'text-red-300/80'}`} />
+                  </div>
+
                   {isWin && game.cashout && (
                     <button
                       type="button"
                       onClick={() => shareScoreToTelegram(game.cashout!, game.profit)}
-                      className="text-[10px] text-sky-400 hover:text-sky-300 font-bold bg-sky-950/70 hover:bg-sky-900/80 px-2 py-0.5 rounded-md border border-sky-500/40 transition-colors flex items-center gap-1 cursor-pointer"
-                      title="اشتراک این رکورد در تلگرام"
+                      className="p-1.5 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/20 hover:border-sky-500/40 transition-all cursor-pointer"
+                      title="اشتراک در تلگرام"
                     >
-                      <Share2 className="w-3 h-3 text-sky-400" />
-                      <span>اشتراک</span>
+                      <Share2 className="w-3.5 h-3.5" />
                     </button>
                   )}
-                  <span className="text-[#9ca3af] font-mono text-[11px] dir-ltr">
-                    {new Date(game.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
                 </div>
               </div>
             </div>

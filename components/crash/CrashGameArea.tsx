@@ -39,9 +39,11 @@ export default function CrashGameArea() {
   const [autoCashoutTarget, setAutoCashoutTarget] = useState(2.0);
   const [currentTheme, setCurrentTheme] = useState<CrashTheme>('racing');
   const [selectedBetAmount, setSelectedBetAmount] = useState<number>(10);
+  const [upgradePulse, setUpgradePulse] = useState<{ tier: number; id: number }>({ tier: 1, id: 0 });
   const [latestReaction, setLatestReaction] = useState<{
     id: string;
     reaction: 'rocket' | 'flame' | 'zap' | 'trophy';
+    multiplier?: number;
     username?: string;
   } | null>(null);
   const betTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -259,6 +261,7 @@ export default function CrashGameArea() {
       setLatestReaction({
         id: lastEvent.id,
         reaction: lastEvent.reaction,
+        multiplier: lastEvent.multiplier,
         username: lastEvent.username,
       });
     }
@@ -270,7 +273,7 @@ export default function CrashGameArea() {
         return;
       }
       setIsProcessingBet(true);
-      sendBet(amount);
+      sendBet(amount, currentTheme);
       if (betTimeoutRef.current) {
         clearTimeout(betTimeoutRef.current);
       }
@@ -278,7 +281,7 @@ export default function CrashGameArea() {
         setIsProcessingBet(false);
       }, 2000);
     },
-    [phase, balance, isProcessingBet, connected, sendBet]
+    [phase, balance, isProcessingBet, connected, sendBet, currentTheme]
   );
 
   const handleCashout = useCallback(() => {
@@ -294,6 +297,36 @@ export default function CrashGameArea() {
       setIsProcessingBet(false);
     }, 2000);
   }, [phase, userBetAmount, userCashout, isProcessingBet, connected, sendCashout]);
+
+  const handleBetAmountChange = useCallback((amount: number) => {
+    setSelectedBetAmount(amount);
+    const tier = amount >= 100 ? 3 : amount >= 50 ? 2 : 1;
+    if (tier >= 2) {
+      setUpgradePulse({ tier, id: Date.now() });
+    }
+  }, []);
+
+  // فعال‌سازی و تغییر ضریب اختصاصی از طریق داک ری‌اکشن‌ها روی بوم
+  const handleSelectReactionMultiplier = useCallback(
+    (multiplier: number) => {
+      // در صورت کلیک مجدد روی همان ضریب، غیرفعال می‌شود (Toggle)
+      if (autoCashoutEnabled && autoCashoutTarget === multiplier) {
+        setAutoCashoutEnabled(false);
+        triggerHaptic('selection');
+      } else {
+        setAutoCashoutEnabled(true);
+        setAutoCashoutTarget(multiplier);
+        triggerHaptic('medium');
+
+        // اگر در حال پرواز بوده و کاربر شرط ثبت کرده و ضریب فعلی از تارگت بیشتر شده، بلافاصله برداشت انجام شود
+        const hasActiveBet = (userBet ?? userBetAmount) > 0 && !userCashout;
+        if (phase === 'flying' && hasActiveBet && currentMultiplier >= multiplier) {
+          handleCashout();
+        }
+      }
+    },
+    [autoCashoutEnabled, autoCashoutTarget, phase, userBet, userBetAmount, userCashout, currentMultiplier, handleCashout]
+  );
 
   // وضعیت بارگذاری / اتصال به سرور بازی
   if (!connected) {
@@ -467,12 +500,15 @@ export default function CrashGameArea() {
                 theme={currentTheme}
                 betTier={betTier}
                 betAmount={effectiveBet}
+                upgradePulse={upgradePulse}
               />
 
-              {/* ری‌اکشن‌های زنده پرواز و نشانگرهای تعاملی خلبان */}
+              {/* ری‌اکشن‌های زنده پرواز و نشانگرهای تعاملی خلبان با ضرایب اختصاصی */}
               <LiveReactionsOverlay
                 onSendReaction={sendReaction}
                 incomingReaction={latestReaction}
+                activeMultiplierTarget={autoCashoutEnabled ? autoCashoutTarget : null}
+                onSelectMultiplier={handleSelectReactionMultiplier}
               />
             </div>
           );
@@ -489,7 +525,9 @@ export default function CrashGameArea() {
           onPlaceBetAction={handlePlaceBet}
           onCashoutAction={handleCashout}
           onAutoCashoutChange={handleAutoCashoutChange}
-          onBetAmountChange={setSelectedBetAmount}
+          onBetAmountChange={handleBetAmountChange}
+          externalAutoCashoutEnabled={autoCashoutEnabled}
+          externalAutoCashoutTarget={autoCashoutTarget}
           userBet={userBetAmount > 0 ? userBetAmount : null}
           userCashout={userCashout}
           balance={balance}

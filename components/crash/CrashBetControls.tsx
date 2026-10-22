@@ -15,6 +15,8 @@ interface CrashBetControlsProps {
   onCashoutAction: () => void;
   onAutoCashoutChange?: (enabled: boolean, target: number) => void;
   onBetAmountChange?: (amount: number) => void;
+  externalAutoCashoutEnabled?: boolean;
+  externalAutoCashoutTarget?: number;
   userBet: number | null;
   userCashout: number | null;
   balance: number;
@@ -31,6 +33,8 @@ function CrashBetControls({
   onCashoutAction,
   onAutoCashoutChange,
   onBetAmountChange,
+  externalAutoCashoutEnabled,
+  externalAutoCashoutTarget,
   userBet,
   userCashout,
   balance,
@@ -43,6 +47,19 @@ function CrashBetControls({
   const [autoCashoutEnabled, setAutoCashoutEnabled] = useState<boolean>(false);
   const [autoCashoutTarget, setAutoCashoutTarget] = useState<number>(2.0);
   const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // همگام‌سازی برداشت خودکار بیرونی (انتخاب از روی بوم یا داک ری‌اکشن‌ها)
+  useEffect(() => {
+    if (externalAutoCashoutEnabled !== undefined) {
+      setAutoCashoutEnabled(externalAutoCashoutEnabled);
+    }
+  }, [externalAutoCashoutEnabled]);
+
+  useEffect(() => {
+    if (externalAutoCashoutTarget !== undefined) {
+      setAutoCashoutTarget(externalAutoCashoutTarget);
+    }
+  }, [externalAutoCashoutTarget]);
 
   // ارسال مبلغ شرط انتخاب‌شده به کامپوننت والد جهت ارتقای ظاهر وسیله/موشک
   useEffect(() => {
@@ -122,8 +139,12 @@ function CrashBetControls({
 
   const handleSelectBet = (amount: number) => {
     if (allowedBets.includes(amount) && (!userBet || gameState === 'crashed')) {
-      triggerHaptic('selection');
+      const isUpgrade = amount >= 50;
+      triggerHaptic(isUpgrade ? 'heavy' : 'selection');
       setBetAmount(amount);
+      if (onBetAmountChange) {
+        onBetAmountChange(amount);
+      }
     }
   };
 

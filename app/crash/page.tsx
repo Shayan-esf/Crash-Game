@@ -1,3 +1,5 @@
+'use client';
+
 import dynamic from 'next/dynamic';
 
 const PhaserCrashGame = dynamic(() => import('../../components/crash/PhaserCrashGame'), { ssr: false });
@@ -8,4 +10,5 @@ export default function CrashPage() {
       <PhaserCrashGame />
     </div>
   );
-} 
+}
+ 
