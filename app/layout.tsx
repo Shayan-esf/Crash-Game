@@ -2,6 +2,7 @@ import AuthProvider from "@/components/AuthProvider"
 import TonConnectRootProvider from "@/components/TonConnectRootProvider"
 import type { Metadata, Viewport } from 'next'
 import Script from 'next/script'
+import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
 export const viewport: Viewport = {
@@ -83,6 +84,7 @@ export default function RootLayout({
         <TonConnectRootProvider>
           <AuthProvider>{children}</AuthProvider>
         </TonConnectRootProvider>
+        <Analytics />
       </body>
     </html>
   )
